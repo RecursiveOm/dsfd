@@ -1,0 +1,2719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panacea Dashboard — Clinic Inventory 2.0</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- React, ReactDOM, Babel -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- SheetJS (xlsx) & jsPDF for Real Import/Export -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(135deg, #faf5ff 0%, #f8fafc 45%, #fdf4ff 100%);
+      color: #1e1b4b;
+      min-height: 100vh;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f5f3ff;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #d8b4fe;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #a855f7;
+    }
+    @keyframes floatSlow {
+      0%, 100% { transform: translateY(0px) rotate(6deg); }
+      50% { transform: translateY(-5px) rotate(8deg); }
+    }
+    .animate-float {
+      animation: floatSlow 4.5s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="antialiased selection:bg-purple-200 selection:text-purple-950">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useRef } = React;
+
+    /* ─────────────────────────────────────────────────────────────
+       Lucide Icon Wrapper Component
+       ───────────────────────────────────────────────────────────── */
+    function Icon({ name, className = "w-4 h-4" }) {
+      const spanRef = useRef(null);
+      useEffect(() => {
+        if (spanRef.current && window.lucide) {
+          spanRef.current.innerHTML = `<i data-lucide="${name}" class="${className}"></i>`;
+          window.lucide.createIcons({ root: spanRef.current });
+        }
+      }, [name, className]);
+      return <span ref={spanRef} className="inline-flex items-center justify-center shrink-0" />;
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       Initial Seed Data (Realistic Clinical Inventory across 4 Tabs)
+       ───────────────────────────────────────────────────────────── */
+    const INITIAL_ITEMS = [
+      // Medications
+      {
+        id: "med-1",
+        name: "Dolo 650 (Paracetamol)",
+        dosage: "650mg",
+        type: "Tablet",
+        category: "medications",
+        price: 6,
+        usedForAge: "Adults, 12+ yrs",
+        description: "Antipyretic & analgesic for fever and mild-to-moderate pain",
+        initialStock: 350,
+        dispensed: 110,
+        currentStock: 240,
+        minStockThreshold: 50,
+        supplier: "Micro Labs Ltd",
+        location: "Dispensary Bay A • Shelf 1",
+        batchNumber: "DL65-26A",
+        expiryDate: "2027-08-15",
+        hasExpiry: true,
+        customFields: { "Schedule": "OTC", "Rack Code": "R-101" }
+      },
+      {
+        id: "med-2",
+        name: "Amoxicillin Clavulanate",
+        dosage: "625mg",
+        type: "Tablet",
+        category: "medications",
+        price: 22,
+        usedForAge: "Adults",
+        description: "Broad-spectrum beta-lactam antibiotic course",
+        initialStock: 180,
+        dispensed: 132,
+        currentStock: 48,
+        minStockThreshold: 40,
+        supplier: "Cipla",
+        location: "Dispensary Bay A • Shelf 2",
+        batchNumber: "AMX-904",
+        expiryDate: "2026-10-28", // Expiring soon!
+        hasExpiry: true,
+        customFields: { "Schedule": "H", "Rack Code": "R-104" }
+      },
+      {
+        id: "med-3",
+        name: "Azithromycin Oral Suspension",
+        dosage: "200mg/5ml",
+        type: "Syrup",
+        category: "medications",
+        price: 118,
+        usedForAge: "Pediatrics (2–10 yrs)",
+        description: "Once-daily macrolide suspension for respiratory infections",
+        initialStock: 60,
+        dispensed: 52,
+        currentStock: 8, // Low stock!
+        minStockThreshold: 15,
+        supplier: "Alkem Labs",
+        location: "Pediatric Cabinet B",
+        batchNumber: "AZM-441",
+        expiryDate: "2027-04-10",
+        hasExpiry: true,
+        customFields: { "Schedule": "H", "Rack Code": "P-202" }
+      },
+      {
+        id: "med-4",
+        name: "Cetirizine Dihydrochloride",
+        dosage: "10mg",
+        type: "Tablet",
+        category: "medications",
+        price: 4,
+        usedForAge: "6+ yrs & Adults",
+        description: "Non-sedating second-generation antihistamine",
+        initialStock: 400,
+        dispensed: 100,
+        currentStock: 300,
+        minStockThreshold: 40,
+        supplier: "Dr. Reddy's",
+        location: "Dispensary Bay A • Shelf 3",
+        batchNumber: "CTZ-118",
+        expiryDate: "2028-01-20",
+        hasExpiry: true,
+        customFields: { "Schedule": "OTC", "Rack Code": "R-109" }
+      },
+      {
+        id: "med-5",
+        name: "Pantoprazole IV",
+        dosage: "40mg",
+        type: "Injection",
+        category: "medications",
+        price: 85,
+        usedForAge: "Adults",
+        description: "Proton pump inhibitor for acute gastritis & reflux",
+        initialStock: 50,
+        dispensed: 53,
+        currentStock: -3, // Backorder!
+        minStockThreshold: 12,
+        supplier: "Sun Pharma",
+        location: "Emergency Crash Cart",
+        batchNumber: "PNT-882",
+        expiryDate: "2027-06-30",
+        hasExpiry: true,
+        customFields: { "Schedule": "H", "Rack Code": "EC-01" }
+      },
+      {
+        id: "med-6",
+        name: "Methylcobalamin (Vitamin B12)",
+        dosage: "1500mcg",
+        type: "Injection",
+        category: "medications",
+        price: 65,
+        usedForAge: "Adults & Seniors",
+        description: "Neurotropic vitamin supplement ampoule",
+        initialStock: 45,
+        dispensed: 30,
+        currentStock: 15,
+        minStockThreshold: 10,
+        supplier: "Mankind",
+        location: "Cabinet C • Tray 4",
+        batchNumber: "MCB-2025",
+        expiryDate: "2026-09-01", // Expired!
+        hasExpiry: true,
+        customFields: { "Schedule": "OTC", "Rack Code": "C-404" }
+      },
+
+      // Vaccinations
+      {
+        id: "vac-1",
+        name: "MMR Vaccine (Live Attenuated)",
+        dosage: "0.5ml",
+        type: "Injection",
+        category: "vaccinations",
+        price: 420,
+        usedForAge: "9–15 Months",
+        description: "Measles, Mumps, and Rubella freeze-dried vaccine",
+        initialStock: 50,
+        dispensed: 38,
+        currentStock: 12, // Low stock
+        minStockThreshold: 15,
+        supplier: "Serum Institute",
+        subCategory: "Single-Dose Vial (SDV)",
+        fundingSource: "Private / Clinic Stock",
+        storageTemp: "Refrigerated 2°C to 8°C",
+        requiresReconstitution: true,
+        location: "Cold-Chain Fridge A • Top Shelf",
+        batchNumber: "MMR-2026X",
+        expiryDate: "2027-03-15",
+        hasExpiry: true,
+        purchaseUnit: "Vial",
+        dispenseUnit: "Dose",
+        conversionFactor: 1,
+        tags: ["#LiveAttenuated", "#StrictColdChain"],
+        customFields: { "VVM Stage": "Stage I" }
+      },
+      {
+        id: "vac-2",
+        name: "BCG Vaccine",
+        dosage: "0.1ml",
+        type: "Injection",
+        category: "vaccinations",
+        price: 145,
+        usedForAge: "At Birth – 1 yr",
+        description: "Bacillus Calmette–Guérin tuberculosis immunization",
+        initialStock: 200,
+        dispensed: 80,
+        currentStock: 120,
+        minStockThreshold: 30,
+        supplier: "GSK Biologicals",
+        subCategory: "Multi-Dose Vial (MDV)",
+        fundingSource: "Government / State-Funded",
+        storageTemp: "Refrigerated 2°C to 8°C",
+        requiresReconstitution: true,
+        location: "Cold-Chain Fridge A • Middle Shelf",
+        batchNumber: "BCG-819",
+        expiryDate: "2027-11-30",
+        hasExpiry: true,
+        purchaseUnit: "Vial",
+        dispenseUnit: "Dose",
+        conversionFactor: 10,
+        tags: ["#LiveAttenuated", "#MultiDose"],
+        customFields: { "VVM Stage": "Stage I" }
+      },
+      {
+        id: "vac-3",
+        name: "DTaP-IPV-Hib Pentavalent",
+        dosage: "0.5ml",
+        type: "Injection",
+        category: "vaccinations",
+        price: 1250,
+        usedForAge: "6, 10, 14 Weeks",
+        description: "Painless acellular pertussis combination pre-filled syringe",
+        initialStock: 40,
+        dispensed: 12,
+        currentStock: 28,
+        minStockThreshold: 10,
+        supplier: "Sanofi Pasteur",
+        subCategory: "Pre-filled Syringe (PFS)",
+        fundingSource: "Private / Clinic Stock",
+        storageTemp: "Refrigerated 2°C to 8°C",
+        requiresReconstitution: false,
+        location: "Cold-Chain Fridge B • Door Guard",
+        batchNumber: "PNT-552",
+        expiryDate: "2026-10-29", // Expiring soon
+        hasExpiry: true,
+        purchaseUnit: "Syringe",
+        dispenseUnit: "Dose",
+        conversionFactor: 1,
+        tags: ["#Inactivated", "#StrictColdChain"],
+        customFields: { "VVM Stage": "Stage I" }
+      },
+
+      // Lab Equipment / Blood Tests
+      {
+        id: "lab-1",
+        name: "CBC Hematology Lyse Reagent",
+        dosage: "500ml",
+        type: "Reagent",
+        category: "blood_tests",
+        price: 3500,
+        usedForAge: "All Ages",
+        description: "Cyanide-free lyse reagent for 5-part differential analyzer",
+        initialStock: 100,
+        dispensed: 95,
+        currentStock: 5, // Low stock
+        minStockThreshold: 15,
+        supplier: "Sysmex Corp",
+        subCategory: "Hematology",
+        location: "Pathology Lab • Analyzer Bay 1",
+        batchNumber: "SYS-9921",
+        arrivalDate: "2026-04-10",
+        expiryDate: "2027-04-10",
+        hasExpiry: true,
+        purchaseUnit: "Bottle",
+        dispenseUnit: "Test",
+        conversionFactor: 100,
+        tags: ["#FastMoving", "#HighValue"],
+        customFields: { "Analyzer": "XN-550" }
+      },
+      {
+        id: "lab-2",
+        name: "EDTA K2 Vacutainer Tubes (Purple Top)",
+        dosage: "3ml Draw",
+        type: "Vial",
+        category: "blood_tests",
+        price: 650,
+        usedForAge: "All Ages",
+        description: "Spray-coated K2EDTA tubes for whole blood hematology",
+        initialStock: 500,
+        dispensed: 180,
+        currentStock: 320,
+        minStockThreshold: 100,
+        supplier: "BD Diagnostics",
+        subCategory: "Hematology",
+        location: "Phlebotomy Station • Drawer 1",
+        batchNumber: "BD-4402",
+        arrivalDate: "2026-06-01",
+        expiryDate: "2027-12-01",
+        hasExpiry: true,
+        purchaseUnit: "Rack",
+        dispenseUnit: "Vial",
+        conversionFactor: 100,
+        tags: ["#FastMoving"],
+        customFields: { "Cap Color": "Lavender" }
+      },
+
+      // Consumables
+      {
+        id: "con-1",
+        name: "Sterile Nitrile Examination Gloves",
+        dosage: "",
+        specification: "Medium • Powder-Free",
+        type: "Piece",
+        category: "consumables",
+        price: 450,
+        usedForAge: "Clinical Staff",
+        description: "Textured fingertip medical grade nitrile gloves",
+        initialStock: 1000,
+        dispensed: 480,
+        currentStock: 520,
+        minStockThreshold: 200,
+        supplier: "Medline Industries",
+        subCategory: "Hygiene, PPE & Safety",
+        isSterile: true,
+        hasExpiry: true,
+        location: "Procedure Room A • Wall Dispenser",
+        batchNumber: "GLV-881",
+        expiryDate: "2028-05-01",
+        purchaseUnit: "Box",
+        dispenseUnit: "Piece",
+        conversionFactor: 100,
+        customFields: { "Material": "Nitrile" }
+      },
+      {
+        id: "con-2",
+        name: "Luer-Lock Hypodermic Syringes",
+        dosage: "",
+        specification: "23G x 1\" • 5ml",
+        type: "Piece",
+        category: "consumables",
+        price: 380,
+        usedForAge: "All Ages",
+        description: "Individually blister-packed sterile 3-part syringes",
+        initialStock: 400,
+        dispensed: 375,
+        currentStock: 25, // Low stock
+        minStockThreshold: 50,
+        supplier: "HMD Healthcare",
+        subCategory: "Phlebotomy & IV Access",
+        isSterile: true,
+        hasExpiry: true,
+        location: "Injection Room • Cabinet 2",
+        batchNumber: "HMD-309",
+        expiryDate: "2029-01-15",
+        purchaseUnit: "Box",
+        dispenseUnit: "Piece",
+        conversionFactor: 100,
+        customFields: { "Needle Gauge": "23G" }
+      }
+    ];
+
+    const INITIAL_LOGS = [
+      {
+        id: "log-1",
+        itemId: "med-1",
+        itemName: "Dolo 650 (Paracetamol)",
+        actionType: "refill",
+        quantity: 100,
+        date: new Date(Date.now() - 1000 * 60 * 18),
+        patientName: "",
+        notes: "Restock Batch: DL65-26A"
+      },
+      {
+        id: "log-2",
+        itemId: "med-2",
+        itemName: "Amoxicillin Clavulanate",
+        actionType: "dispense",
+        quantity: 14,
+        date: new Date(Date.now() - 1000 * 60 * 52),
+        patientName: "Aarav Sharma",
+        notes: "OPD Consultation #4092 — 7-day BD course"
+      },
+      {
+        id: "log-3",
+        itemId: "vac-1",
+        itemName: "MMR Vaccine (Live Attenuated)",
+        actionType: "dispense",
+        quantity: 1,
+        date: new Date(Date.now() - 1000 * 60 * 140),
+        patientName: "Baby Kiara Deshmukh",
+        notes: "9-Month Well-Baby Immunization"
+      },
+      {
+        id: "log-4",
+        itemId: "med-6",
+        itemName: "Methylcobalamin (Vitamin B12)",
+        actionType: "wastage",
+        quantity: 3,
+        date: new Date(Date.now() - 1000 * 60 * 320),
+        patientName: "",
+        notes: "Wastage: Expired batch quarantine (Expired item)"
+      },
+      {
+        id: "log-5",
+        itemId: "con-1",
+        itemName: "Sterile Nitrile Examination Gloves",
+        actionType: "refill",
+        quantity: 300,
+        date: new Date(Date.now() - 1000 * 60 * 60 * 24),
+        patientName: "",
+        notes: "Restock Batch: GLV-881"
+      }
+    ];
+
+    /* ─────────────────────────────────────────────────────────────
+       Helper Functions & Stock Health Evaluators
+       ───────────────────────────────────────────────────────────── */
+    function formatDateTime(date) {
+      if (!date) return "Unknown date";
+      const d = date instanceof Date ? date : new Date(date);
+      if (isNaN(d.getTime())) return "Invalid date";
+      return d.toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    }
+
+    function evaluateItemHealth(item) {
+      const now = new Date();
+      let isExpired = false;
+      let isExpiringSoon = false;
+      let daysUntilExpiry = null;
+
+      if (item.hasExpiry !== false && item.expiryDate) {
+        const expDate = new Date(item.expiryDate);
+        if (!isNaN(expDate.getTime())) {
+          const diffTime = expDate.getTime() - now.getTime();
+          daysUntilExpiry = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          if (daysUntilExpiry < 0) {
+            isExpired = true;
+          } else if (daysUntilExpiry <= 30) {
+            isExpiringSoon = true;
+          }
+        }
+      }
+
+      const threshold = item.minStockThreshold || 10;
+      const isBackorder = item.currentStock < 0;
+      const isZero = item.currentStock === 0;
+      const isLowStock = item.currentStock <= threshold && item.currentStock > 0;
+
+      let state = "healthy";
+      if (isExpired) state = "expired";
+      else if (isBackorder || isZero) state = "critical";
+      else if (isLowStock) state = "low";
+      else if (isExpiringSoon) state = "expiring_soon";
+
+      const denom = Math.max(item.initialStock || 1, item.currentStock || 1, threshold * 2);
+      const capacityPercentage = Math.min(100, Math.max(0, Math.round((Math.max(0, item.currentStock) / denom) * 100)));
+
+      return {
+        state,
+        isExpired,
+        isExpiringSoon,
+        isLowStock,
+        isBackorder,
+        isZero,
+        daysUntilExpiry,
+        capacityPercentage
+      };
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       Animated Number Counter
+       ───────────────────────────────────────────────────────────── */
+    function AnimatedNumber({ value, prefix = "", suffix = "" }) {
+      const [displayVal, setDisplayVal] = useState(value);
+      const prevValue = useRef(value);
+
+      useEffect(() => {
+        const start = prevValue.current;
+        const end = value;
+        if (start === end) return;
+
+        const duration = 450;
+        let startTime = null;
+        let raf;
+
+        const step = (timestamp) => {
+          if (!startTime) startTime = timestamp;
+          const progress = Math.min((timestamp - startTime) / duration, 1);
+          const eased = 1 - Math.pow(1 - progress, 3);
+          setDisplayVal(Math.round(start + (end - start) * eased));
+          if (progress < 1) {
+            raf = requestAnimationFrame(step);
+          } else {
+            setDisplayVal(end);
+            prevValue.current = end;
+          }
+        };
+
+        raf = requestAnimationFrame(step);
+        return () => cancelAnimationFrame(raf);
+      }, [value]);
+
+      return <span>{prefix}{displayVal.toLocaleString("en-IN")}{suffix}</span>;
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       Highlighted Search Text
+       ───────────────────────────────────────────────────────────── */
+    function HighlightedText({ text, highlight }) {
+      if (!highlight || !highlight.trim() || !text) return <>{text}</>;
+      const escaped = highlight.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(`(${escaped})`, "gi");
+      const parts = String(text).split(regex);
+      return (
+        <>
+          {parts.map((part, i) =>
+            regex.test(part) ? (
+              <mark key={i} className="bg-purple-200 text-purple-950 font-extrabold px-0.5 rounded">
+                {part}
+              </mark>
+            ) : (
+              <span key={i}>{part}</span>
+            )
+          )}
+        </>
+      );
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       Inline Editable Cell (Excel Feel)
+       ───────────────────────────────────────────────────────────── */
+    function EditableCell({ value, onSave, type = "text", prefix = "", className = "" }) {
+      const [isEditing, setIsEditing] = useState(false);
+      const [val, setVal] = useState(value?.toString() || "");
+
+      useEffect(() => {
+        setVal(value?.toString() || "");
+      }, [value]);
+
+      const handleSave = () => {
+        setIsEditing(false);
+        if (val !== value?.toString()) onSave(val);
+      };
+
+      if (isEditing) {
+        return (
+          <input
+            autoFocus
+            type={type}
+            value={val}
+            onChange={(e) => setVal(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSave();
+              if (e.key === "Escape") {
+                setVal(value?.toString() || "");
+                setIsEditing(false);
+              }
+            }}
+            className={`h-7 text-xs w-full min-w-[70px] px-2 py-1 border border-purple-500 bg-white rounded-md focus:outline-none focus:ring-2 focus:ring-purple-300 ${className}`}
+          />
+        );
+      }
+
+      const isEmpty = (value === undefined || value === null || value === "") && value !== 0;
+      return (
+        <div
+          onClick={() => setIsEditing(true)}
+          title="Click to inline edit"
+          className={`cursor-pointer px-1.5 py-1 -mx-1.5 -my-1 rounded-md transition-all border border-transparent hover:border-purple-200 min-h-[24px] flex items-center ${
+            isEmpty
+              ? "border-dashed border-purple-100 text-slate-300 italic text-[11px] bg-purple-50/30 hover:bg-purple-50"
+              : "hover:bg-purple-50/80"
+          } ${className}`}
+        >
+          {isEmpty ? "Empty" : `${prefix}${value}`}
+        </div>
+      );
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       Decorative Medical Illustration (Light Purple Theme)
+       ───────────────────────────────────────────────────────────── */
+    function HeroMedicalIllustration() {
+      return (
+        <div className="relative w-36 h-24 hidden lg:flex items-center justify-center select-none pointer-events-none">
+          <div className="absolute inset-0 bg-gradient-to-tr from-purple-300/30 via-fuchsia-200/30 to-violet-100/20 rounded-full blur-2xl" />
+          <svg viewBox="0 0 180 110" className="w-full h-full drop-shadow-sm overflow-visible animate-float">
+            <defs>
+              <linearGradient id="vialBody" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
+                <stop offset="100%" stopColor="#f3e8ff" stopOpacity="0.88" />
+              </linearGradient>
+              <linearGradient id="vialLiquid" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#a855f7" />
+                <stop offset="100%" stopColor="#7c3aed" />
+              </linearGradient>
+              <linearGradient id="capGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#9333ea" />
+                <stop offset="100%" stopColor="#6366f1" />
+              </linearGradient>
+              <linearGradient id="pillPink" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#e879f9" />
+                <stop offset="100%" stopColor="#a855f7" />
+              </linearGradient>
+            </defs>
+            <ellipse cx="95" cy="94" rx="58" ry="11" fill="#ede9fe" opacity="0.75" />
+            <ellipse cx="95" cy="94" rx="38" ry="6" fill="#ddd6fe" opacity="0.55" />
+            <g transform="translate(22, 50) rotate(-28)">
+              <rect x="0" y="0" width="32" height="15" rx="7.5" fill="#ffffff" stroke="#e9d5ff" strokeWidth="1.5" />
+              <path d="M 0 7.5 A 7.5 7.5 0 0 1 7.5 0 L 16 0 L 16 15 L 7.5 15 A 7.5 7.5 0 0 1 0 7.5 Z" fill="url(#pillPink)" />
+            </g>
+            <g transform="translate(68, 12) rotate(8)">
+              <rect x="11" y="0" width="26" height="9" rx="3" fill="url(#capGrad)" />
+              <rect x="14" y="9" width="20" height="5" fill="#e9d5ff" />
+              <rect x="4" y="14" width="40" height="58" rx="9" fill="url(#vialBody)" stroke="#d8b4fe" strokeWidth="1.5" />
+              <rect x="8" y="34" width="32" height="34" rx="6" fill="url(#vialLiquid)" opacity="0.9" />
+              <rect x="10" y="26" width="28" height="22" rx="4" fill="#ffffff" opacity="0.95" />
+              <path d="M22 32 H26 V35 H29 V39 H26 V42 H22 V39 H19 V35 H22 Z" fill="#9333ea" />
+              <path d="M9 19 V64" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" opacity="0.7" />
+            </g>
+            <g transform="translate(128, 38) rotate(-14)">
+              <rect x="4" y="0" width="14" height="5" rx="2" fill="#7c3aed" />
+              <rect x="0" y="5" width="22" height="36" rx="5" fill="url(#vialBody)" stroke="#c4b5fd" strokeWidth="1.5" />
+              <rect x="3" y="18" width="16" height="20" rx="3" fill="#c084fc" opacity="0.75" />
+            </g>
+            <circle cx="48" cy="24" r="3" fill="#a855f7" opacity="0.6" />
+            <circle cx="148" cy="24" r="2.5" fill="#e879f9" opacity="0.7" />
+          </svg>
+        </div>
+      );
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       Premium Inventory Item Card (Dual Card View)
+       ───────────────────────────────────────────────────────────── */
+    function InventoryItemCard({ item, highlightSearch, recentlyUpdated, onRefill, onWastage, onEdit, onDelete }) {
+      const health = evaluateItemHealth(item);
+      const catIcon =
+        item.category === "vaccinations" ? "syringe" :
+        item.category === "blood_tests" ? "test-tube-2" :
+        item.category === "consumables" ? "box" : "pill";
+
+      const renderStatusBadge = () => {
+        switch (health.state) {
+          case "expired":
+            return <span className="bg-red-600 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full shadow-sm">Expired</span>;
+          case "critical":
+            return (
+              <span className="bg-red-100 text-red-700 border border-red-200 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-ping" />
+                {health.isBackorder ? `Backorder (${Math.abs(item.currentStock)})` : "Out of Stock"}
+              </span>
+            );
+          case "low":
+            return (
+              <span className="bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                Low Stock
+              </span>
+            );
+          case "expiring_soon":
+            return (
+              <span className="bg-orange-100 text-orange-800 border border-orange-200 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                <Icon name="clock" className="w-3 h-3" />
+                Exp in {health.daysUntilExpiry}d
+              </span>
+            );
+          default:
+            return (
+              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                In Stock
+              </span>
+            );
+        }
+      };
+
+      const barColor =
+        health.state === "expired" ? "from-slate-400 to-slate-500" :
+        health.state === "critical" ? "from-red-500 to-rose-600" :
+        health.state === "low" ? "from-amber-400 to-orange-500" :
+        health.state === "expiring_soon" ? "from-orange-400 to-amber-500" :
+        "from-emerald-400 via-teal-500 to-emerald-600";
+
+      return (
+        <div
+          className={`group relative rounded-2xl bg-white border transition-all duration-300 flex flex-col justify-between p-4 shadow-sm hover:shadow-xl hover:shadow-purple-500/10 hover:-translate-y-1 ${
+            health.isExpired ? "border-red-200 bg-slate-50/70 opacity-85" :
+            health.state === "critical" ? "border-red-200 hover:border-red-300" :
+            health.state === "low" ? "border-amber-200 hover:border-amber-300" :
+            "border-purple-100 hover:border-purple-300"
+          } ${recentlyUpdated ? "ring-2 ring-purple-500 bg-purple-50/50" : ""}`}
+        >
+          <div>
+            {/* Top Status & Quick Action Bar */}
+            <div className="flex items-center justify-between gap-2 mb-3">
+              {renderStatusBadge()}
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={() => onWastage(item)}
+                  title="Log Breakage / Wastage"
+                  className="h-8 w-8 rounded-xl text-amber-500 hover:text-amber-700 hover:bg-amber-50 flex items-center justify-center transition-colors"
+                >
+                  <Icon name="alert-octagon" className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => onEdit(item)}
+                  title="Edit Details"
+                  className="h-8 w-8 rounded-xl text-slate-400 hover:text-purple-700 hover:bg-purple-50 flex items-center justify-center transition-colors"
+                >
+                  <Icon name="edit-2" className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => onDelete(item)}
+                  title="Delete Asset"
+                  className="h-8 w-8 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 flex items-center justify-center transition-colors"
+                >
+                  <Icon name="trash-2" className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Product Visual + Identity */}
+            <div className="flex items-start gap-3.5 mb-3.5">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-50 via-violet-50 to-fuchsia-50 border border-purple-100 flex items-center justify-center shrink-0 overflow-hidden shadow-inner group-hover:scale-105 transition-transform">
+                {item.imageUrl ? (
+                  <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                ) : (
+                  <Icon name={catIcon} className="w-6 h-6 text-purple-600" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h4 className="font-extrabold text-slate-900 text-sm leading-snug truncate" title={item.name}>
+                  <HighlightedText text={item.name} highlight={highlightSearch} />
+                </h4>
+                <p className="text-xs font-medium text-slate-500 truncate mt-0.5">
+                  {[
+                    item.dosage,
+                    item.specification,
+                    item.subCategory || item.type,
+                    item.usedForAge ? `Age: ${item.usedForAge}` : null
+                  ].filter(Boolean).join(" • ") || "Clinical Supply"}
+                </p>
+                <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-100 capitalize">
+                    {item.category.replace("_", " ")}
+                  </span>
+                  {item.isSterile && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100">
+                      Sterile
+                    </span>
+                  )}
+                  {item.storageTemp && item.category === "vaccinations" && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100 truncate max-w-[130px]">
+                      {item.storageTemp}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Stock Capacity Progress Bar */}
+            <div className="bg-slate-50/90 rounded-xl p-2.5 border border-slate-100 mb-3">
+              <div className="flex items-baseline justify-between mb-1.5">
+                <div>
+                  <span className={`text-lg font-black tracking-tight ${health.isBackorder || health.isZero ? "text-red-600" : health.isLowStock ? "text-amber-700" : "text-slate-900"}`}>
+                    <AnimatedNumber value={Math.max(0, item.currentStock)} />
+                  </span>
+                  <span className="text-[11px] font-bold text-slate-500 ml-1">
+                    {item.dispenseUnit ? `${item.dispenseUnit}s` : "units"}
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold text-slate-400">
+                  {health.capacityPercentage}% capacity (Min: {item.minStockThreshold || 10})
+                </span>
+              </div>
+              <div className="w-full h-2 bg-slate-200/80 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full bg-gradient-to-r transition-all duration-700 ${barColor}`}
+                  style={{ width: `${Math.max(6, health.capacityPercentage)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Metadata Grid */}
+            <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 mb-3.5 px-0.5">
+              <div className="flex flex-col">
+                <span className="text-[9px] uppercase font-bold text-slate-400">Unit Price</span>
+                <span className="font-extrabold text-purple-950 text-xs">₹{item.price.toLocaleString("en-IN")}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[9px] uppercase font-bold text-slate-400">Dispensed</span>
+                <span className="font-bold text-slate-700">{item.dispensed} units</span>
+              </div>
+              {item.supplier && (
+                <div className="flex items-center gap-1.5 col-span-2 truncate text-slate-500">
+                  <Icon name="building-2" className="w-3 h-3 text-purple-400" />
+                  <span className="truncate">Supplier: <strong className="text-slate-700">{item.supplier}</strong></span>
+                </div>
+              )}
+              {item.location && (
+                <div className="flex items-center gap-1.5 col-span-2 truncate text-slate-500">
+                  <Icon name="map-pin" className="w-3 h-3 text-purple-400" />
+                  <span className="truncate">{item.location}</span>
+                </div>
+              )}
+              {item.hasExpiry !== false && (item.expiryDate || item.batchNumber) && (
+                <div className="flex items-center justify-between col-span-2 pt-1.5 border-t border-slate-100 text-[10px]">
+                  {item.batchNumber ? <span className="font-mono font-bold text-slate-600">Batch: {item.batchNumber}</span> : <span />}
+                  {item.expiryDate && (
+                    <span className={`font-bold px-1.5 py-0.5 rounded ${health.isExpired ? "bg-red-600 text-white" : health.isExpiringSoon ? "bg-orange-100 text-orange-800" : "bg-slate-100 text-slate-600"}`}>
+                      Exp: {item.expiryDate}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Card Footer Actions */}
+          <div className="flex items-center gap-2 pt-2 border-t border-purple-50">
+            {!health.isExpired ? (
+              <button
+                onClick={() => onRefill(item)}
+                className="h-9 flex-1 rounded-xl bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white font-bold text-xs shadow-sm shadow-purple-200 flex items-center justify-center gap-1.5 transition-all active:scale-95"
+              >
+                <Icon name="refresh-cw" className="w-3.5 h-3.5" /> Refill
+              </button>
+            ) : (
+              <div className="flex-1 text-center py-2 rounded-xl bg-red-50 text-red-700 font-bold text-xs border border-red-200">
+                Expired — Dispose
+              </div>
+            )}
+            <button
+              onClick={() => onEdit(item)}
+              className="h-9 px-3.5 rounded-xl border border-purple-200 text-purple-700 hover:bg-purple-50 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <Icon name="edit-2" className="w-3.5 h-3.5" /> Edit
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       Main Panacea Inventory Application
+       ───────────────────────────────────────────────────────────── */
+    function PanaceaInventoryApp() {
+      const [items, setItems] = useState(INITIAL_ITEMS);
+      const [logs, setLogs] = useState(INITIAL_LOGS);
+      const [activeTab, setActiveTab] = useState("medications");
+      const [subTab, setSubTab] = useState("list"); // 'list' | 'stats'
+      const [viewMode, setViewMode] = useState("card"); // 'card' | 'table'
+
+      // Explorer Filters & Sorting
+      const [localSearch, setLocalSearch] = useState("");
+      const [showDropdown, setShowDropdown] = useState(false);
+      const [statusFilter, setStatusFilter] = useState("all");
+      const [supplierFilter, setSupplierFilter] = useState("all");
+      const [sortBy, setSortBy] = useState("name_asc");
+      const [recentlyUpdatedId, setRecentlyUpdatedId] = useState(null);
+
+      // Modals State
+      const [addModalOpen, setAddModalOpen] = useState(false);
+      const [editingItem, setEditingItem] = useState(null);
+      const [refillItem, setRefillItem] = useState(null);
+      const [wastageItem, setWastageItem] = useState(null);
+      const [deleteConfirmItem, setDeleteConfirmItem] = useState(null);
+      const [wipeConfirmOpen, setWipeConfirmOpen] = useState(false);
+      const [downloadOpen, setDownloadOpen] = useState(false);
+      const [reportRange, setReportRange] = useState("1month");
+
+      // Toast Notification State
+      const [toasts, setToasts] = useState([]);
+      const fileInputRef = useRef(null);
+
+      const showToast = (title, description, variant = "default") => {
+        const id = Date.now() + Math.random();
+        setToasts((prev) => [...prev, { id, title, description, variant }]);
+        setTimeout(() => {
+          setToasts((prev) => prev.filter((t) => t.id !== id));
+        }, 3600);
+      };
+
+      const triggerHighlight = (id) => {
+        setRecentlyUpdatedId(id);
+        setTimeout(() => {
+          setRecentlyUpdatedId((prev) => (prev === id ? null : prev));
+        }, 2200);
+      };
+
+      // Items for current category tab
+      const tabItems = useMemo(() => {
+        if (activeTab === "log") return items;
+        return items.filter((i) => i.category === activeTab);
+      }, [items, activeTab]);
+
+      // Derived Intelligence Metrics for active category
+      const inventoryMetrics = useMemo(() => {
+        let totalValue = 0;
+        let totalUnits = 0;
+        let lowStockCount = 0;
+        let criticalCount = 0;
+        let expiringSoonCount = 0;
+        let expiredCount = 0;
+        let healthyCount = 0;
+
+        tabItems.forEach((item) => {
+          const avail = Math.max(0, item.currentStock);
+          totalUnits += avail;
+          totalValue += avail * (item.price || 0);
+
+          const h = evaluateItemHealth(item);
+          if (h.isExpired) expiredCount++;
+          else if (h.isExpiringSoon) expiringSoonCount++;
+
+          if (h.isBackorder || h.isZero) criticalCount++;
+          else if (h.isLowStock) lowStockCount++;
+
+          if (h.state === "healthy") healthyCount++;
+        });
+
+        const total = tabItems.length || 1;
+        return {
+          totalItems: tabItems.length,
+          totalValue,
+          totalUnits,
+          lowAndCriticalCount: lowStockCount + criticalCount,
+          lowStockCount,
+          criticalCount,
+          expiringAttentionCount: expiringSoonCount + expiredCount,
+          expiringSoonCount,
+          expiredCount,
+          healthyCount,
+          healthyPct: tabItems.length > 0 ? Math.round((healthyCount / total) * 100) : 100,
+          lowPct: tabItems.length > 0 ? Math.round(((lowStockCount + criticalCount) / total) * 100) : 0,
+          expPct: tabItems.length > 0 ? Math.round(((expiringSoonCount + expiredCount) / total) * 100) : 0
+        };
+      }, [tabItems]);
+
+      const availableSuppliers = useMemo(() => {
+        const set = new Set();
+        tabItems.forEach((i) => {
+          if (i.supplier && i.supplier.trim()) set.add(i.supplier.trim());
+        });
+        return Array.from(set).sort();
+      }, [tabItems]);
+
+      // Filtered & Sorted Items
+      const categoryItems = useMemo(() => {
+        const term = localSearch.trim().toLowerCase();
+        const filtered = tabItems.filter((d) => {
+          const matchesSearch =
+            !term ||
+            d.name.toLowerCase().includes(term) ||
+            (d.supplier && d.supplier.toLowerCase().includes(term)) ||
+            (d.batchNumber && d.batchNumber.toLowerCase().includes(term)) ||
+            (d.location && d.location.toLowerCase().includes(term)) ||
+            (d.subCategory && d.subCategory.toLowerCase().includes(term));
+
+          if (!matchesSearch) return false;
+          if (supplierFilter !== "all" && (d.supplier || "") !== supplierFilter) return false;
+
+          if (statusFilter !== "all") {
+            const h = evaluateItemHealth(d);
+            if (statusFilter === "low" && !(h.isLowStock || h.isBackorder || h.isZero)) return false;
+            if (statusFilter === "expiring" && !(h.isExpiringSoon || h.isExpired)) return false;
+            if (statusFilter === "expired" && !h.isExpired) return false;
+            if (statusFilter === "healthy" && h.state !== "healthy") return false;
+          }
+          return true;
+        });
+
+        return filtered.sort((a, b) => {
+          if (sortBy === "stock_asc") return a.currentStock - b.currentStock;
+          if (sortBy === "stock_desc") return b.currentStock - a.currentStock;
+          if (sortBy === "price_desc") return (b.price || 0) - (a.price || 0);
+          if (sortBy === "dispensed_desc") return (b.dispensed || 0) - (a.dispensed || 0);
+          return a.name.localeCompare(b.name);
+        });
+      }, [tabItems, localSearch, supplierFilter, statusFilter, sortBy]);
+
+      const dynamicColumns = useMemo(
+        () => Array.from(new Set(tabItems.flatMap((i) => Object.keys(i.customFields || {})))),
+        [tabItems]
+      );
+
+      const topUsed = useMemo(
+        () => [...tabItems].sort((a, b) => b.dispensed - a.dispensed).slice(0, 10).filter((i) => i.dispensed > 0),
+        [tabItems]
+      );
+      const maxDispensed = topUsed.length > 0 ? topUsed[0].dispensed : 1;
+
+      const filteredLogs = useMemo(() => {
+        if (!localSearch.trim()) return logs;
+        const term = localSearch.toLowerCase();
+        return logs.filter(
+          (log) =>
+            log.itemName.toLowerCase().includes(term) ||
+            (log.patientName && log.patientName.toLowerCase().includes(term)) ||
+            (log.notes && log.notes.toLowerCase().includes(term))
+        );
+      }, [logs, localSearch]);
+
+      // Inline Edit Handlers
+      const handleInlineSave = (item, field, val) => {
+        let updateVal = val;
+        if (field === "price") updateVal = Math.max(0, parseFloat(val) || 0);
+        if (field === "minStockThreshold") updateVal = parseInt(val, 10) || 10;
+
+        setItems((prev) =>
+          prev.map((it) => (it.id === item.id ? { ...it, [field]: updateVal } : it))
+        );
+        triggerHighlight(item.id);
+        showToast("Field Updated", `Updated ${field} for ${item.name}.`);
+      };
+
+      const handleInlineCustomFieldSave = (item, col, val) => {
+        setItems((prev) =>
+          prev.map((it) =>
+            it.id === item.id
+              ? { ...it, customFields: { ...(it.customFields || {}), [col]: val } }
+              : it
+          )
+        );
+        triggerHighlight(item.id);
+        showToast("Custom Attribute Saved", `Updated "${col}" on ${item.name}.`);
+      };
+
+      const handleDeleteColumn = (colName) => {
+        if (!window.confirm(`Delete custom column "${colName}" from all items in this category?`)) return;
+        setItems((prev) =>
+          prev.map((it) => {
+            if (it.category !== activeTab || !it.customFields) return it;
+            const copy = { ...it.customFields };
+            delete copy[colName];
+            return { ...it, customFields: copy };
+          })
+        );
+        showToast("Column Deleted", `Removed "${colName}" from ${activeTab}.`);
+      };
+
+      // Excel / CSV Smart Import
+      const handleUniversalDataUpload = async (e) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        const file = e.target.files[0];
+        try {
+          const data = await file.arrayBuffer();
+          const workbook = window.XLSX.read(data, { type: "array" });
+          const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+          const parsedData = window.XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+          if (parsedData.length === 0) throw new Error("Spreadsheet is empty.");
+
+          const newItems = [];
+          const newLogs = [];
+
+          parsedData.forEach((row, idx) => {
+            const itemId = `imp-${Date.now()}-${idx}`;
+            const customFields = {};
+            const normalizedObj = {
+              id: itemId,
+              category: activeTab === "log" ? "medications" : activeTab,
+              dispensed: 0,
+              price: 0,
+              initialStock: 25,
+              minStockThreshold: 10,
+              hasExpiry: true
+            };
+
+            Object.entries(row).forEach(([key, val]) => {
+              const cleanKey = key.trim().toLowerCase();
+              const cleanVal = typeof val === "string" ? val.trim() : val;
+              if (cleanVal === "") return;
+
+              if (["name", "item", "product", "title"].some((h) => cleanKey === h || cleanKey.includes("name")))
+                normalizedObj.name = String(cleanVal);
+              else if (["dosage", "dose", "strength"].some((h) => cleanKey.includes(h)))
+                normalizedObj.dosage = String(cleanVal);
+              else if (cleanKey === "type") normalizedObj.type = String(cleanVal);
+              else if (["price", "cost", "mrp", "rate"].some((h) => cleanKey.includes(h)))
+                normalizedObj.price = Math.max(0, parseFloat(String(cleanVal)) || 0);
+              else if (["stock", "qty", "quantity", "initial"].some((h) => cleanKey.includes(h)))
+                normalizedObj.initialStock = parseInt(String(cleanVal), 10) || 0;
+              else if (["batch", "lot"].some((h) => cleanKey.includes(h)))
+                normalizedObj.batchNumber = String(cleanVal);
+              else if (["exp", "expiry"].some((h) => cleanKey.includes(h)))
+                normalizedObj.expiryDate = String(cleanVal);
+              else if (cleanKey.includes("supplier") || cleanKey.includes("vendor"))
+                normalizedObj.supplier = String(cleanVal);
+              else if (cleanKey.includes("location"))
+                normalizedObj.location = String(cleanVal);
+              else customFields[key.trim()] = String(cleanVal);
+            });
+
+            if (!normalizedObj.name) normalizedObj.name = `Imported Asset #${idx + 1}`;
+            normalizedObj.currentStock = normalizedObj.initialStock;
+            normalizedObj.customFields = customFields;
+
+            newItems.push(normalizedObj);
+            newLogs.push({
+              id: `log-imp-${Date.now()}-${idx}`,
+              itemId,
+              itemName: normalizedObj.name,
+              actionType: "refill",
+              quantity: normalizedObj.initialStock,
+              date: new Date(),
+              notes: "Excel Smart Bulk Import"
+            });
+          });
+
+          setItems((prev) => [...newItems, ...prev]);
+          setLogs((prev) => [...newLogs, ...prev]);
+          showToast("Smart Import Complete", `Imported ${newItems.length} records with dynamic custom columns.`);
+          e.target.value = "";
+        } catch (err) {
+          showToast("Import Failed", err.message || "Could not parse spreadsheet.", "destructive");
+        }
+      };
+
+      // Export PDF Report
+      const handleDownloadPdf = () => {
+        try {
+          const { jsPDF } = window.jspdf;
+          const docPdf = new jsPDF("p", "mm", "a4");
+          const pdfWidth = docPdf.internal.pageSize.getWidth();
+
+          docPdf.setFillColor(124, 58, 237);
+          docPdf.rect(0, 0, pdfWidth, 34, "F");
+          docPdf.setTextColor(255, 255, 255);
+          docPdf.setFontSize(20);
+          docPdf.setFont("helvetica", "bold");
+          docPdf.text("PANACEA CLINIC INVENTORY REPORT", pdfWidth / 2, 21, { align: "center" });
+
+          docPdf.setTextColor(30, 27, 75);
+          docPdf.setFontSize(10);
+          docPdf.setFont("helvetica", "normal");
+          docPdf.text(`Generated On: ${formatDateTime(new Date())}`, 15, 44);
+          docPdf.text(`Period: ${reportRange.toUpperCase()}`, pdfWidth - 15, 44, { align: "right" });
+
+          docPdf.autoTable({
+            startY: 52,
+            head: [["Item Name", "Category", "Supplier", "Price (Rs.)", "Initial", "Dispensed", "Current Stock"]],
+            body: items.map((item) => [
+              item.name,
+              item.category.toUpperCase(),
+              item.supplier || "-",
+              `Rs. ${item.price}`,
+              item.initialStock,
+              item.dispensed,
+              item.currentStock
+            ]),
+            theme: "grid",
+            headStyles: { fillColor: [139, 92, 246], textColor: 255 },
+            styles: { fontSize: 8.5, cellPadding: 2.8 }
+          });
+
+          const nextY = docPdf.lastAutoTable.finalY + 12;
+          docPdf.setFontSize(13);
+          docPdf.setFont("helvetica", "bold");
+          docPdf.setTextColor(109, 40, 217);
+          docPdf.text("Recent Inventory Audit Logs", 15, nextY);
+
+          docPdf.autoTable({
+            startY: nextY + 5,
+            head: [["Date", "Action", "Item", "Patient / Notes", "Delta"]],
+            body: logs.map((l) => [
+              formatDateTime(l.date),
+              l.actionType.toUpperCase(),
+              l.itemName,
+              `${l.patientName ? l.patientName + " - " : ""}${l.notes || ""}`,
+              `${l.actionType === "refill" ? "+" : "-"}${l.quantity}`
+            ]),
+            theme: "striped",
+            headStyles: { fillColor: [167, 139, 250], textColor: 255 },
+            styles: { fontSize: 8 }
+          });
+
+          docPdf.save(`Panacea_Inventory_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+          setDownloadOpen(false);
+          showToast("PDF Report Exported", "Your clinic inventory report has been downloaded.");
+        } catch (err) {
+          showToast("Export Error", "Could not generate PDF.", "destructive");
+        }
+      };
+
+      const categoryLabel =
+        activeTab === "medications" ? "Medications" :
+        activeTab === "vaccinations" ? "Vaccinations" :
+        activeTab === "blood_tests" ? "Lab Equipment" :
+        activeTab === "consumables" ? "Consumables" : "Activity Logs";
+
+      return (
+        <div className="min-h-screen flex flex-col">
+          {/* ─────────────────────────────────────────────────────────
+             EXISTING PANACEA GLOBAL TOP NAVIGATION BAR SHELL
+             ───────────────────────────────────────────────────────── */}
+          <header className="sticky top-0 z-40 bg-white/85 backdrop-blur-xl border-b border-purple-100/80 px-4 sm:px-8 h-16 flex items-center justify-between shadow-2xs">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-600 to-violet-600 flex items-center justify-center text-white shadow-sm shadow-purple-300">
+                <Icon name="shield-plus" className="w-5 h-5" />
+              </div>
+              <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-purple-900 via-purple-700 to-violet-700 bg-clip-text text-transparent">
+                Panacea&apos;s Dashboard
+              </span>
+            </div>
+
+            <div className="hidden md:flex items-center relative w-96">
+              <Icon name="search" className="w-4 h-4 text-purple-400 absolute left-3.5" />
+              <input
+                type="text"
+                readOnly
+                placeholder="Search patients, docs, features..."
+                onClick={() => document.getElementById("inventorySearchInput")?.focus()}
+                className="w-full h-9 pl-10 pr-12 rounded-full bg-purple-50/60 border border-purple-100 text-xs text-slate-600 placeholder:text-slate-400 focus:outline-none cursor-pointer hover:border-purple-200 transition-colors"
+              />
+              <kbd className="absolute right-3 text-[10px] font-bold text-purple-500 bg-white px-1.5 py-0.5 rounded border border-purple-100">⌘K</kbd>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5 bg-purple-50/50 border border-purple-100/80 px-3 py-1.5 rounded-full">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-600 to-fuchsia-500 text-white font-bold text-xs flex items-center justify-center shadow-xs">
+                  DR
+                </div>
+                <div className="text-left hidden sm:block leading-tight">
+                  <p className="text-xs font-extrabold text-purple-950">Dr. Ruksana</p>
+                  <p className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Plan Active
+                  </p>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {/* ─────────────────────────────────────────────────────────
+             MAIN INVENTORY 2.0 CONTENT CONTAINER
+             ───────────────────────────────────────────────────────── */}
+          <main className="flex-1 max-w-[1440px] w-full mx-auto p-4 sm:p-6 lg:p-8">
+            <div className="shadow-2xl shadow-purple-950/5 border border-purple-100/90 overflow-hidden rounded-3xl bg-white/90 backdrop-blur-xl relative">
+              <input type="file" accept=".csv, .xlsx, .xls" ref={fileInputRef} className="hidden" onChange={handleUniversalDataUpload} />
+
+              {/* Top Signature Gradient Bar */}
+              <div className="h-1.5 w-full bg-gradient-to-r from-fuchsia-500 via-purple-600 to-violet-600" />
+
+              {/* A. SPECTACULAR INVENTORY HEADER */}
+              <div className="bg-gradient-to-b from-purple-50/60 via-white to-white border-b border-purple-100/80 pb-6 pt-6 px-5 sm:px-8 relative overflow-hidden">
+                <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-purple-200/30 blur-3xl pointer-events-none" />
+                <div className="absolute -bottom-24 left-1/3 w-64 h-64 rounded-full bg-fuchsia-200/20 blur-3xl pointer-events-none" />
+
+                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 relative z-10">
+                  <div className="flex items-start sm:items-center gap-4">
+                    <div className="w-13 h-13 p-3.5 rounded-2xl bg-gradient-to-br from-purple-600 via-violet-600 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-purple-500/25 text-white shrink-0">
+                      <Icon name="archive" className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-purple-700 bg-purple-100/90 border border-purple-200/60 px-2.5 py-0.5 rounded-full">
+                          Panacea Inventory 2.0
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2.5 py-0.5 rounded-full">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          Live Cloud Sync
+                        </span>
+                      </div>
+                      <h1 className="text-2xl sm:text-3xl font-black text-purple-950 tracking-tight mt-1">
+                        Your Clinic&apos;s Inventory, <span className="bg-gradient-to-r from-purple-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent">Smarter Than Ever</span>
+                      </h1>
+                      <p className="text-slate-500 font-medium text-xs sm:text-sm mt-1">
+                        Track, manage, and monitor real-time clinical stock, cold-chain vaccines, and supply health in one command center.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 w-full lg:w-auto justify-between lg:justify-end">
+                    <HeroMedicalIllustration />
+                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 w-full sm:w-auto">
+                      {activeTab !== "log" && (
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className="rounded-xl h-11 px-4 border border-purple-200 text-purple-800 bg-white hover:bg-purple-50 hover:border-purple-300 font-bold text-xs shadow-2xs flex items-center justify-center gap-2 transition-all active:scale-95 flex-1 sm:flex-initial"
+                        >
+                          <Icon name="upload" className="w-4 h-4 text-purple-600" /> Smart Import
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setDownloadOpen(true)}
+                        className="rounded-xl h-11 px-4 border border-purple-200 text-purple-800 bg-white hover:bg-purple-50 hover:border-purple-300 font-bold text-xs shadow-2xs flex items-center justify-center gap-2 transition-all active:scale-95 flex-1 sm:flex-initial"
+                      >
+                        <Icon name="download" className="w-4 h-4 text-purple-600" /> Report
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingItem(null);
+                          setAddModalOpen(true);
+                        }}
+                        className="rounded-xl h-11 px-5 bg-gradient-to-r from-purple-600 via-violet-600 to-fuchsia-600 hover:from-purple-700 hover:via-violet-700 hover:to-fuchsia-700 text-white font-bold text-xs shadow-lg shadow-purple-500/25 flex items-center justify-center gap-2 transition-all hover:-translate-y-0.5 active:scale-95 w-full sm:w-auto"
+                      >
+                        <Icon name="plus-circle" className="w-4 h-4" /> Add New Item
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* B. INTERACTIVE INVENTORY INTELLIGENCE CARDS */}
+                {activeTab !== "log" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5 mt-6 relative z-10">
+                    {/* Card 1: Total Items */}
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter("all")}
+                      className={`text-left p-4 rounded-2xl bg-white border transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 flex items-center justify-between group ${
+                        statusFilter === "all" ? "border-purple-400 ring-2 ring-purple-500/15 bg-purple-50/20" : "border-purple-100 hover:border-purple-300"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total {categoryLabel}</span>
+                          {statusFilter === "all" && <span className="text-[9px] font-extrabold bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">Active View</span>}
+                        </div>
+                        <div className="text-2xl sm:text-3xl font-black text-purple-950 mt-1">
+                          <AnimatedNumber value={inventoryMetrics.totalItems} />
+                        </div>
+                        <p className="text-[11px] font-semibold text-purple-600 mt-1 flex items-center gap-1">
+                          <Icon name="package-check" className="w-3.5 h-3.5" />
+                          <span><AnimatedNumber value={inventoryMetrics.totalUnits} /> total available units</span>
+                        </p>
+                      </div>
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-100 to-violet-50 border border-purple-200/60 flex items-center justify-center text-purple-600 group-hover:scale-110 transition-transform">
+                        <Icon name="archive" className="w-5 h-5" />
+                      </div>
+                    </button>
+
+                    {/* Card 2: Category Stock Value */}
+                    <div className="p-4 rounded-2xl bg-white border border-purple-100 transition-all duration-300 hover:shadow-md hover:border-purple-300 flex items-center justify-between group">
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Category Stock Value</span>
+                        <div className="text-2xl sm:text-3xl font-black text-purple-950 mt-1">
+                          <AnimatedNumber value={Math.round(inventoryMetrics.totalValue)} prefix="₹" />
+                        </div>
+                        <p className="text-[11px] font-semibold text-emerald-600 mt-1 flex items-center gap-1">
+                          <Icon name="activity" className="w-3.5 h-3.5" />
+                          <span>{inventoryMetrics.healthyPct}% stock in healthy range</span>
+                        </p>
+                      </div>
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-fuchsia-100 to-purple-50 border border-fuchsia-200/60 flex items-center justify-center text-fuchsia-600 group-hover:scale-110 transition-transform">
+                        <Icon name="circle-dollar-sign" className="w-5 h-5" />
+                      </div>
+                    </div>
+
+                    {/* Card 3: Low / Depleted Stock (Interactive Filter) */}
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter((prev) => (prev === "low" ? "all" : "low"))}
+                      className={`text-left p-4 rounded-2xl bg-white border transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 flex items-center justify-between group ${
+                        statusFilter === "low" ? "border-amber-400 ring-2 ring-amber-500/20 bg-amber-50/30" : "border-purple-100 hover:border-amber-300"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Low / Depleted Stock</span>
+                          {statusFilter === "low" && <span className="text-[9px] font-extrabold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">Filtered</span>}
+                        </div>
+                        <div className={`text-2xl sm:text-3xl font-black mt-1 ${inventoryMetrics.lowAndCriticalCount > 0 ? "text-amber-600" : "text-slate-900"}`}>
+                          <AnimatedNumber value={inventoryMetrics.lowAndCriticalCount} />
+                        </div>
+                        <p className="text-[11px] font-semibold text-slate-500 mt-1">
+                          {inventoryMetrics.criticalCount > 0 ? (
+                            <span className="text-red-600 font-bold">{inventoryMetrics.criticalCount} backorder • Click to filter</span>
+                          ) : inventoryMetrics.lowStockCount > 0 ? (
+                            <span className="text-amber-700">Below threshold • Click to filter</span>
+                          ) : (
+                            <span className="text-emerald-600">All items above minimum alert</span>
+                          )}
+                        </p>
+                      </div>
+                      <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center group-hover:scale-110 transition-transform ${
+                        inventoryMetrics.lowAndCriticalCount > 0 ? "bg-amber-50 border-amber-200 text-amber-600" : "bg-slate-50 border-slate-200 text-slate-400"
+                      }`}>
+                        <Icon name="alert-triangle" className="w-5 h-5" />
+                      </div>
+                    </button>
+
+                    {/* Card 4: Expiring / Expired (Interactive Filter) */}
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter((prev) => (prev === "expiring" ? "all" : "expiring"))}
+                      className={`text-left p-4 rounded-2xl bg-white border transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 flex items-center justify-between group ${
+                        statusFilter === "expiring" ? "border-red-400 ring-2 ring-red-500/20 bg-red-50/30" : "border-purple-100 hover:border-red-300"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Expiring / Expired</span>
+                          {statusFilter === "expiring" && <span className="text-[9px] font-extrabold bg-red-100 text-red-800 px-1.5 py-0.5 rounded">Filtered</span>}
+                        </div>
+                        <div className={`text-2xl sm:text-3xl font-black mt-1 ${inventoryMetrics.expiringAttentionCount > 0 ? "text-red-600" : "text-slate-900"}`}>
+                          <AnimatedNumber value={inventoryMetrics.expiringAttentionCount} />
+                        </div>
+                        <p className="text-[11px] font-semibold text-slate-500 mt-1">
+                          {inventoryMetrics.expiredCount > 0 ? (
+                            <span className="text-red-600 font-bold">{inventoryMetrics.expiredCount} expired • {inventoryMetrics.expiringSoonCount} within 30d</span>
+                          ) : inventoryMetrics.expiringSoonCount > 0 ? (
+                            <span className="text-orange-600 font-bold">{inventoryMetrics.expiringSoonCount} expiring within 30 days</span>
+                          ) : (
+                            <span className="text-emerald-600">No upcoming expiry risks</span>
+                          )}
+                        </p>
+                      </div>
+                      <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center group-hover:scale-110 transition-transform ${
+                        inventoryMetrics.expiringAttentionCount > 0 ? "bg-red-50 border-red-200 text-red-600" : "bg-slate-50 border-slate-200 text-slate-400"
+                      }`}>
+                        <Icon name="calendar-clock" className="w-5 h-5" />
+                      </div>
+                    </button>
+                  </div>
+                )}
+
+                {/* Proportional Stock Health Bar */}
+                {activeTab !== "log" && tabItems.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-purple-100/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 relative z-10">
+                    <div className="flex items-center gap-3 w-full sm:w-auto flex-1 max-w-md">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-800 whitespace-nowrap">Inventory Health</span>
+                      <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden flex p-0.5 gap-0.5 border border-purple-100">
+                        {inventoryMetrics.healthyPct > 0 && (
+                          <div className="h-full bg-emerald-500 rounded-full transition-all duration-700" style={{ width: `${inventoryMetrics.healthyPct}%` }} />
+                        )}
+                        {inventoryMetrics.lowPct > 0 && (
+                          <div className="h-full bg-amber-500 rounded-full transition-all duration-700" style={{ width: `${inventoryMetrics.lowPct}%` }} />
+                        )}
+                        {inventoryMetrics.expPct > 0 && (
+                          <div className="h-full bg-red-500 rounded-full transition-all duration-700" style={{ width: `${inventoryMetrics.expPct}%` }} />
+                        )}
+                      </div>
+                      <span className="text-[11px] font-bold text-slate-600">{inventoryMetrics.healthyPct}% Healthy</span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                      {statusFilter !== "all" || supplierFilter !== "all" || localSearch.trim() !== "" ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStatusFilter("all");
+                            setSupplierFilter("all");
+                            setLocalSearch("");
+                          }}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-purple-700 bg-purple-100/80 hover:bg-purple-200/80 px-3 py-1 rounded-full transition-colors"
+                        >
+                          <Icon name="x" className="w-3 h-3" /> Reset Active Filters ({categoryItems.length} of {tabItems.length} shown)
+                        </button>
+                      ) : (
+                        <span className="text-slate-400 font-medium text-xs">
+                          Tip: Click any metric card above to filter stock by health status, or switch to Table View for inline spreadsheet editing.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* C. WORKSPACE BODY */}
+              <div className="p-4 sm:p-6 bg-slate-50/40">
+                {/* Category Navigation Tabs */}
+                <div className="flex flex-wrap w-full p-1.5 bg-white border border-purple-100 shadow-xs rounded-2xl gap-1.5">
+                  {[
+                    { id: "medications", label: "Medications", icon: "pill" },
+                    { id: "vaccinations", label: "Vaccinations", icon: "syringe" },
+                    { id: "blood_tests", label: "Lab Equipment", icon: "test-tube-2" },
+                    { id: "consumables", label: "Consumables", icon: "box" }
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => {
+                        setActiveTab(tab.id);
+                        setLocalSearch("");
+                        setStatusFilter("all");
+                        setSupplierFilter("all");
+                      }}
+                      className={`flex-1 min-w-[125px] py-2.5 px-3 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${
+                        activeTab === tab.id
+                          ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-md shadow-purple-500/20"
+                          : "text-slate-600 hover:text-purple-800 hover:bg-purple-50/50"
+                      }`}
+                    >
+                      <Icon name={tab.icon} className="w-4 h-4" />
+                      <span>{tab.label}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeTab === tab.id ? "bg-white/20 text-white" : "bg-purple-50 text-purple-700"}`}>
+                        {items.filter((i) => i.category === tab.id).length}
+                      </span>
+                    </button>
+                  ))}
+                  <div className="w-[1px] bg-purple-100 my-1 hidden md:block" />
+                  <button
+                    onClick={() => {
+                      setActiveTab("log");
+                      setLocalSearch("");
+                    }}
+                    className={`flex-1 min-w-[125px] py-2.5 px-3 text-xs sm:text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${
+                      activeTab === "log"
+                        ? "bg-purple-950 text-white shadow-md"
+                        : "text-purple-900 hover:bg-purple-50"
+                    }`}
+                  >
+                    <Icon name="history" className="w-4 h-4" />
+                    <span>Activity Logs</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeTab === "log" ? "bg-white/20 text-white" : "bg-purple-100 text-purple-800"}`}>
+                      {logs.length}
+                    </span>
+                  </button>
+                </div>
+
+                {/* INVENTORY EXPLORER CONTENT */}
+                {activeTab !== "log" ? (
+                  <div className="mt-6">
+                    {/* Explorer Toolbar */}
+                    <div className="flex flex-col xl:flex-row justify-between items-stretch xl:items-center mb-5 gap-3 bg-white p-3 rounded-2xl border border-purple-100/80 shadow-2xs">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Sub-Tabs: Explorer vs Analytics */}
+                        <div className="flex bg-purple-50/70 border border-purple-100 rounded-xl p-1">
+                          <button
+                            onClick={() => setSubTab("list")}
+                            className={`py-1.5 px-3.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                              subTab === "list" ? "bg-white text-purple-800 shadow-xs" : "text-slate-600 hover:text-purple-800"
+                            }`}
+                          >
+                            <Icon name="archive" className="w-3.5 h-3.5" /> Inventory Explorer
+                          </button>
+                          <button
+                            onClick={() => setSubTab("stats")}
+                            className={`py-1.5 px-3.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                              subTab === "stats" ? "bg-white text-fuchsia-700 shadow-xs" : "text-slate-600 hover:text-fuchsia-700"
+                            }`}
+                          >
+                            <Icon name="bar-chart-3" className="w-3.5 h-3.5" /> Usage & Analytics
+                          </button>
+                        </div>
+
+                        {/* Card vs Table View Switch */}
+                        {subTab === "list" && (
+                          <div className="flex items-center bg-slate-100/80 p-1 rounded-xl border border-slate-200/60">
+                            <button
+                              type="button"
+                              onClick={() => setViewMode("card")}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                viewMode === "card" ? "bg-purple-600 text-white shadow-xs" : "text-slate-600 hover:text-purple-700"
+                              }`}
+                            >
+                              <Icon name="layout-grid" className="w-3.5 h-3.5" /> Card View
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setViewMode("table")}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                viewMode === "table" ? "bg-purple-600 text-white shadow-xs" : "text-slate-600 hover:text-purple-700"
+                              }`}
+                            >
+                              <Icon name="list" className="w-3.5 h-3.5" /> Table View
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Search, Filters & Sort */}
+                      <div className="flex flex-wrap items-center gap-2 flex-1 xl:justify-end">
+                        <div className="relative flex-1 min-w-[220px] sm:max-w-xs z-30">
+                          <Icon name="search" className="w-4 h-4 text-purple-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            id="inventorySearchInput"
+                            placeholder={`Search ${categoryLabel.toLowerCase()}, batch, supplier...`}
+                            value={localSearch}
+                            onFocus={() => setShowDropdown(true)}
+                            onBlur={() => setTimeout(() => setShowDropdown(false), 180)}
+                            onChange={(e) => {
+                              setLocalSearch(e.target.value);
+                              setShowDropdown(true);
+                            }}
+                            className="w-full pl-9 pr-8 h-10 bg-slate-50/70 focus:bg-white border border-purple-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-xs font-medium"
+                          />
+                          {localSearch && (
+                            <button
+                              onClick={() => setLocalSearch("")}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                            >
+                              <Icon name="x" className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
+                          {showDropdown && localSearch.trim() && categoryItems.length > 0 &&
+                            !(categoryItems.length === 1 && categoryItems[0].name.toLowerCase() === localSearch.toLowerCase()) && (
+                              <div className="absolute top-full left-0 mt-1.5 w-full sm:w-[340px] max-h-64 overflow-y-auto bg-white border border-purple-100 shadow-2xl rounded-2xl p-1.5 flex flex-col gap-1 z-50">
+                                {Array.from(new Set(categoryItems.map((i) => i.name))).slice(0, 6).map((uName, idx) => (
+                                  <div
+                                    key={idx}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => {
+                                      setLocalSearch(uName);
+                                      setShowDropdown(false);
+                                    }}
+                                    className="p-2.5 hover:bg-purple-50 rounded-xl cursor-pointer flex justify-between items-center gap-3"
+                                  >
+                                    <p className="text-xs font-bold text-slate-800 truncate">
+                                      <HighlightedText text={uName} highlight={localSearch} />
+                                    </p>
+                                    <span className="text-[10px] text-purple-600 font-bold bg-purple-100/70 px-2 py-0.5 rounded-md">Select</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                        </div>
+
+                        <select
+                          value={statusFilter}
+                          onChange={(e) => setStatusFilter(e.target.value)}
+                          className="h-10 px-3 text-xs font-semibold bg-slate-50/70 border border-purple-100 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                          <option value="all">All Statuses</option>
+                          <option value="healthy">Healthy Stock</option>
+                          <option value="low">Low / Critical</option>
+                          <option value="expiring">Expiring / Expired</option>
+                          <option value="expired">Expired Only</option>
+                        </select>
+
+                        {availableSuppliers.length > 0 && (
+                          <select
+                            value={supplierFilter}
+                            onChange={(e) => setSupplierFilter(e.target.value)}
+                            className="h-10 px-3 text-xs font-semibold bg-slate-50/70 border border-purple-100 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          >
+                            <option value="all">All Suppliers</option>
+                            {availableSuppliers.map((s) => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                        )}
+
+                        <select
+                          value={sortBy}
+                          onChange={(e) => setSortBy(e.target.value)}
+                          className="h-10 px-3 text-xs font-semibold bg-slate-50/70 border border-purple-100 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                          <option value="name_asc">Sort: Name (A–Z)</option>
+                          <option value="stock_asc">Stock (Low to High)</option>
+                          <option value="stock_desc">Stock (High to Low)</option>
+                          <option value="price_desc">Price (High to Low)</option>
+                          <option value="dispensed_desc">Most Dispensed</option>
+                        </select>
+
+                        <button
+                          onClick={() => setWipeConfirmOpen(true)}
+                          disabled={tabItems.length === 0}
+                          title={`Wipe all ${categoryLabel}`}
+                          className="h-10 w-10 rounded-xl text-red-500 border border-red-100 bg-red-50/40 hover:bg-red-100/70 flex items-center justify-center transition-colors disabled:opacity-40"
+                        >
+                          <Icon name="trash-2" className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* LIST OR ANALYTICS VIEW */}
+                    {subTab === "list" ? (
+                      categoryItems.length === 0 ? (
+                        <div className="rounded-3xl bg-white border border-purple-100 py-16 px-4 text-center shadow-2xs">
+                          <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-purple-100 to-fuchsia-50 border border-purple-200/60 flex items-center justify-center mx-auto mb-4">
+                            <Icon name="sparkles" className="w-7 h-7 text-purple-600" />
+                          </div>
+                          <h4 className="text-lg font-extrabold text-purple-950">No matching inventory assets found</h4>
+                          <p className="text-xs font-medium text-slate-500 max-w-md mx-auto mt-1">
+                            Try resetting your active search or status filters, or add a new clinical asset.
+                          </p>
+                          <div className="flex items-center justify-center gap-2.5 mt-5">
+                            <button
+                              onClick={() => {
+                                setLocalSearch("");
+                                setStatusFilter("all");
+                                setSupplierFilter("all");
+                              }}
+                              className="px-4 py-2 rounded-xl border border-purple-200 text-purple-700 font-bold text-xs hover:bg-purple-50"
+                            >
+                              Reset Filters
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingItem(null);
+                                setAddModalOpen(true);
+                              }}
+                              className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs"
+                            >
+                              Add New Item
+                            </button>
+                          </div>
+                        </div>
+                      ) : viewMode === "card" ? (
+                        /* CARD GRID VIEW */
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                          {categoryItems.map((item) => (
+                            <InventoryItemCard
+                              key={item.id}
+                              item={item}
+                              highlightSearch={localSearch}
+                              recentlyUpdated={recentlyUpdatedId === item.id}
+                              onRefill={(it) => setRefillItem(it)}
+                              onWastage={(it) => setWastageItem(it)}
+                              onEdit={(it) => {
+                                setEditingItem(it);
+                                setAddModalOpen(true);
+                              }}
+                              onDelete={(it) => setDeleteConfirmItem(it)}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        /* INLINE-EDITABLE TABLE VIEW */
+                        <div className="border border-purple-100 rounded-2xl shadow-xs bg-white overflow-hidden">
+                          <div className="overflow-x-auto w-full">
+                            <table className="w-full text-left border-collapse">
+                              <thead className="bg-gradient-to-r from-purple-50/90 via-violet-50/60 to-purple-50/90 border-b border-purple-100 text-xs font-extrabold text-purple-950">
+                                <tr>
+                                  <th className="py-3.5 pl-6 pr-3 whitespace-nowrap min-w-[220px]">Item Name</th>
+                                  {activeTab === "medications" && (
+                                    <>
+                                      <th className="p-3 whitespace-nowrap">Dosage</th>
+                                      <th className="p-3 whitespace-nowrap">Type</th>
+                                      <th className="p-3 whitespace-nowrap">Used For Age</th>
+                                      <th className="p-3 whitespace-nowrap">Supplier</th>
+                                      <th className="p-3 whitespace-nowrap">Description</th>
+                                    </>
+                                  )}
+                                  {activeTab === "vaccinations" && (
+                                    <>
+                                      <th className="p-3 whitespace-nowrap">Brand / Mfg</th>
+                                      <th className="p-3 whitespace-nowrap">Patient Age</th>
+                                      <th className="p-3 whitespace-nowrap">Funding</th>
+                                      <th className="p-3 whitespace-nowrap">Pkg Type</th>
+                                      <th className="p-3 whitespace-nowrap">Storage Temp</th>
+                                      <th className="p-3 whitespace-nowrap">Location</th>
+                                      <th className="p-3 whitespace-nowrap">Batch / Expiry</th>
+                                    </>
+                                  )}
+                                  {activeTab === "blood_tests" && (
+                                    <>
+                                      <th className="p-3 whitespace-nowrap">Sub-Category</th>
+                                      <th className="p-3 whitespace-nowrap">Batch / Lot</th>
+                                      <th className="p-3 whitespace-nowrap">Expiry Date</th>
+                                      <th className="p-3 whitespace-nowrap">Location</th>
+                                      <th className="p-3 whitespace-nowrap">Supplier</th>
+                                    </>
+                                  )}
+                                  {activeTab === "consumables" && (
+                                    <>
+                                      <th className="p-3 whitespace-nowrap">Variant / Size</th>
+                                      <th className="p-3 whitespace-nowrap">Sub-Category</th>
+                                      <th className="p-3 whitespace-nowrap">Batch / Expiry</th>
+                                      <th className="p-3 whitespace-nowrap">Location</th>
+                                      <th className="p-3 whitespace-nowrap">Supplier</th>
+                                    </>
+                                  )}
+                                  <th className="p-3 whitespace-nowrap">Min Alert</th>
+                                  <th className="p-3 whitespace-nowrap">Price (₹)</th>
+                                  {dynamicColumns.map((col) => (
+                                    <th key={col} className="p-3 whitespace-nowrap group relative pr-7">
+                                      {col}
+                                      <button
+                                        onClick={() => handleDeleteColumn(col)}
+                                        title="Delete Column"
+                                        className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600"
+                                      >
+                                        <Icon name="x" className="w-3.5 h-3.5" />
+                                      </button>
+                                    </th>
+                                  ))}
+                                  <th className="p-3 text-center whitespace-nowrap">Dispensed</th>
+                                  <th className="p-3 text-center whitespace-nowrap min-w-[130px]">Current Stock</th>
+                                  <th className="py-3.5 pr-6 pl-3 text-right whitespace-nowrap sticky right-0 bg-purple-50/95 backdrop-blur-md border-l border-purple-100">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-purple-50 text-xs">
+                                {categoryItems.map((item) => {
+                                  const health = evaluateItemHealth(item);
+                                  const isLow = health.isLowStock || health.isZero;
+                                  return (
+                                    <tr
+                                      key={item.id}
+                                      className={`transition-colors group ${
+                                        health.isExpired ? "bg-slate-100/80 opacity-75" :
+                                        health.isBackorder ? "bg-red-50/40 hover:bg-red-50/80" :
+                                        isLow ? "bg-amber-50/30 hover:bg-amber-50/60" :
+                                        "hover:bg-purple-50/40"
+                                      } ${recentlyUpdatedId === item.id ? "bg-purple-100/70" : ""}`}
+                                    >
+                                      <td className="py-3 pl-6 pr-3 font-bold text-slate-900 whitespace-nowrap">
+                                        <EditableCell value={item.name} onSave={(v) => handleInlineSave(item, "name", v)} className="font-extrabold text-slate-900" />
+                                      </td>
+
+                                      {activeTab === "medications" && (
+                                        <>
+                                          <td className="p-3"><EditableCell value={item.dosage} onSave={(v) => handleInlineSave(item, "dosage", v)} /></td>
+                                          <td className="p-3"><EditableCell value={item.type} onSave={(v) => handleInlineSave(item, "type", v)} /></td>
+                                          <td className="p-3"><EditableCell value={item.usedForAge} onSave={(v) => handleInlineSave(item, "usedForAge", v)} /></td>
+                                          <td className="p-3"><EditableCell value={item.supplier || ""} onSave={(v) => handleInlineSave(item, "supplier", v)} /></td>
+                                          <td className="p-3 max-w-[200px] truncate"><EditableCell value={item.description} onSave={(v) => handleInlineSave(item, "description", v)} /></td>
+                                        </>
+                                      )}
+
+                                      {activeTab === "vaccinations" && (
+                                        <>
+                                          <td className="p-3"><EditableCell value={item.supplier || ""} onSave={(v) => handleInlineSave(item, "supplier", v)} /></td>
+                                          <td className="p-3"><EditableCell value={item.usedForAge} onSave={(v) => handleInlineSave(item, "usedForAge", v)} /></td>
+                                          <td className="p-3"><EditableCell value={item.fundingSource || ""} onSave={(v) => handleInlineSave(item, "fundingSource", v)} /></td>
+                                          <td className="p-3"><EditableCell value={item.subCategory || ""} onSave={(v) => handleInlineSave(item, "subCategory", v)} /></td>
+                                          <td className="p-3"><EditableCell value={item.storageTemp || ""} onSave={(v) => handleInlineSave(item, "storageTemp", v)} /></td>
+                                          <td className="p-3"><EditableCell value={item.location || ""} onSave={(v) => handleInlineSave(item, "location", v)} /></td>
+                                          <td className="p-3">
+                                            <div className="flex flex-col gap-0.5">
+                                              <span className="font-mono font-bold text-slate-700"><EditableCell value={item.batchNumber || ""} onSave={(v) => handleInlineSave(item, "batchNumber", v)} /></span>
+                                              <span className="text-[10px] font-bold text-red-600"><EditableCell type="date" value={item.expiryDate || ""} prefix="Exp: " onSave={(v) => handleInlineSave(item, "expiryDate", v)} /></span>
+                                            </div>
+                                          </td>
+                                        </>
+                                      )}
+
+                                      {activeTab === "blood_tests" && (
+                                        <>
+                                          <td className="p-3"><EditableCell value={item.subCategory || ""} onSave={(v) => handleInlineSave(item, "subCategory", v)} /></td>
+                                          <td className="p-3 font-mono font-bold"><EditableCell value={item.batchNumber || ""} onSave={(v) => handleInlineSave(item, "batchNumber", v)} /></td>
+                                          <td className="p-3"><EditableCell type="date" value={item.expiryDate || ""} onSave={(v) => handleInlineSave(item, "expiryDate", v)} /></td>
+                                          <td className="p-3"><EditableCell value={item.location || ""} onSave={(v) => handleInlineSave(item, "location", v)} /></td>
+                                          <td className="p-3"><EditableCell value={item.supplier || ""} onSave={(v) => handleInlineSave(item, "supplier", v)} /></td>
+                                        </>
+                                      )}
+
+                                      {activeTab === "consumables" && (
+                                        <>
+                                          <td className="p-3"><EditableCell value={item.specification || ""} onSave={(v) => handleInlineSave(item, "specification", v)} /></td>
+                                          <td className="p-3"><EditableCell value={item.subCategory || ""} onSave={(v) => handleInlineSave(item, "subCategory", v)} /></td>
+                                          <td className="p-3">
+                                            <div className="flex flex-col gap-0.5">
+                                              <span className="font-mono font-bold text-slate-700"><EditableCell value={item.batchNumber || ""} onSave={(v) => handleInlineSave(item, "batchNumber", v)} /></span>
+                                              <span className="text-[10px] font-bold text-red-600"><EditableCell type="date" value={item.expiryDate || ""} prefix="Exp: " onSave={(v) => handleInlineSave(item, "expiryDate", v)} /></span>
+                                            </div>
+                                          </td>
+                                          <td className="p-3"><EditableCell value={item.location || ""} onSave={(v) => handleInlineSave(item, "location", v)} /></td>
+                                          <td className="p-3"><EditableCell value={item.supplier || ""} onSave={(v) => handleInlineSave(item, "supplier", v)} /></td>
+                                        </>
+                                      )}
+
+                                      <td className="p-3"><EditableCell type="number" value={item.minStockThreshold || 10} onSave={(v) => handleInlineSave(item, "minStockThreshold", v)} /></td>
+                                      <td className="p-3 font-bold text-slate-800"><EditableCell type="number" value={item.price} prefix="₹" onSave={(v) => handleInlineSave(item, "price", v)} /></td>
+
+                                      {dynamicColumns.map((col) => (
+                                        <td key={col} className="p-3 text-slate-600">
+                                          <EditableCell value={item.customFields?.[col] || ""} onSave={(v) => handleInlineCustomFieldSave(item, col, v)} />
+                                        </td>
+                                      ))}
+
+                                      <td className="p-3 text-center font-bold text-slate-500">{item.dispensed}</td>
+                                      <td className="p-3 text-center">
+                                        {health.isBackorder ? (
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-100 text-red-700 font-extrabold text-[11px]">
+                                            0 (Need: {Math.abs(item.currentStock)})
+                                          </span>
+                                        ) : isLow ? (
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 font-extrabold text-[11px]">
+                                            {item.currentStock} (Low)
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center px-3 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 font-extrabold text-xs">
+                                            {item.currentStock}
+                                          </span>
+                                        )}
+                                      </td>
+
+                                      <td className="py-3 pr-6 pl-3 text-right whitespace-nowrap sticky right-0 bg-white/95 group-hover:bg-purple-50/95 backdrop-blur-md border-l border-purple-100">
+                                        <div className="inline-flex items-center justify-end gap-1">
+                                          {!health.isExpired && (
+                                            <button
+                                              onClick={() => setRefillItem(item)}
+                                              className="h-8 px-3 rounded-full border border-purple-200 text-purple-700 hover:bg-purple-100 font-bold text-xs inline-flex items-center gap-1"
+                                            >
+                                              <Icon name="refresh-cw" className="w-3 h-3" /> Refill
+                                            </button>
+                                          )}
+                                          <button
+                                            onClick={() => setWastageItem(item)}
+                                            title="Log Wastage"
+                                            className="h-8 w-8 rounded-xl text-amber-500 hover:bg-amber-50 flex items-center justify-center"
+                                          >
+                                            <Icon name="alert-octagon" className="w-4 h-4" />
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setEditingItem(item);
+                                              setAddModalOpen(true);
+                                            }}
+                                            title="Edit Item"
+                                            className="h-8 w-8 rounded-xl text-purple-600 hover:bg-purple-100 flex items-center justify-center"
+                                          >
+                                            <Icon name="edit-2" className="w-4 h-4" />
+                                          </button>
+                                          <button
+                                            onClick={() => setDeleteConfirmItem(item)}
+                                            title="Delete Item"
+                                            className="h-8 w-8 rounded-xl text-red-400 hover:bg-red-50 hover:text-red-600 flex items-center justify-center"
+                                          >
+                                            <Icon name="trash-2" className="w-4 h-4" />
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )
+                    ) : (
+                      /* ANALYTICS SUB-TAB */
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                        <div className="bg-white rounded-2xl border border-purple-100 p-5 shadow-xs flex flex-col items-center">
+                          <h3 className="text-sm font-extrabold text-purple-950 self-start flex items-center gap-2 mb-4">
+                            <Icon name="activity" className="w-4 h-4 text-purple-600" /> Category Health Breakdown
+                          </h3>
+                          <div className="relative w-36 h-36 flex items-center justify-center">
+                            <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
+                              <circle cx="18" cy="18" r="15.915" fill="none" stroke="#f1f5f9" strokeWidth="3.8" />
+                              <circle
+                                cx="18"
+                                cy="18"
+                                r="15.915"
+                                fill="none"
+                                stroke="#10b981"
+                                strokeWidth="3.8"
+                                strokeDasharray={`${inventoryMetrics.healthyPct} ${100 - inventoryMetrics.healthyPct}`}
+                                strokeLinecap="round"
+                              />
+                            </svg>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                              <span className="text-2xl font-black text-purple-950">{inventoryMetrics.healthyPct}%</span>
+                              <span className="text-[10px] font-bold uppercase text-slate-400">Healthy</span>
+                            </div>
+                          </div>
+                          <div className="w-full space-y-2 mt-5 text-xs">
+                            <div className="flex justify-between p-2.5 rounded-xl bg-emerald-50 text-emerald-900 font-bold">
+                              <span>Optimal Stock</span>
+                              <span>{inventoryMetrics.healthyCount} items</span>
+                            </div>
+                            <div className="flex justify-between p-2.5 rounded-xl bg-amber-50 text-amber-900 font-bold">
+                              <span>Low Stock</span>
+                              <span>{inventoryMetrics.lowStockCount} items</span>
+                            </div>
+                            <div className="flex justify-between p-2.5 rounded-xl bg-red-50 text-red-900 font-bold">
+                              <span>Critical / Backorder</span>
+                              <span>{inventoryMetrics.criticalCount} items</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="lg:col-span-2 bg-white rounded-2xl border border-purple-100 p-5 shadow-xs">
+                          <h3 className="text-sm font-extrabold text-fuchsia-950 flex items-center gap-2 mb-4">
+                            <Icon name="trending-up" className="w-4 h-4 text-fuchsia-600" /> Most Dispensed {categoryLabel}
+                          </h3>
+                          <div className="space-y-3">
+                            {topUsed.map((item, idx) => {
+                              const pct = Math.max(6, (item.dispensed / maxDispensed) * 100);
+                              return (
+                                <div key={item.id} className="bg-slate-50/70 p-3.5 rounded-2xl border border-purple-100/60 flex items-center gap-4">
+                                  <div className="w-8 h-8 rounded-xl bg-fuchsia-100 text-fuchsia-700 font-black text-xs flex items-center justify-center">
+                                    #{idx + 1}
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="flex justify-between mb-1.5 text-xs font-extrabold text-slate-800">
+                                      <span>{item.name} {item.dosage && `(${item.dosage})`}</span>
+                                      <span className="text-fuchsia-700">{item.dispensed} units</span>
+                                    </div>
+                                    <div className="w-full bg-slate-200/70 rounded-full h-2.5 overflow-hidden">
+                                      <div className="bg-gradient-to-r from-fuchsia-500 to-purple-600 h-full rounded-full" style={{ width: `${pct}%` }} />
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* D. ACTIVITY LOGS TAB */
+                  <div className="mt-6">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3 bg-white p-4 rounded-2xl border border-purple-100 shadow-2xs">
+                      <div>
+                        <h3 className="text-sm font-extrabold text-purple-950 flex items-center gap-2">
+                          <Icon name="history" className="w-4 h-4 text-purple-600" /> Real-Time Inventory Audit Trail
+                        </h3>
+                        <p className="text-xs text-slate-500">Chronological ledger of all stock refills, dispensations, and wastage disposals.</p>
+                      </div>
+                      <div className="relative w-full sm:w-72">
+                        <Icon name="search" className="w-4 h-4 text-purple-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          placeholder="Search logs by item, patient, or note..."
+                          value={localSearch}
+                          onChange={(e) => setLocalSearch(e.target.value)}
+                          className="w-full pl-9 pr-4 h-10 bg-slate-50/70 focus:bg-white border border-purple-100 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="border border-purple-100 rounded-2xl shadow-xs bg-white overflow-hidden">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="bg-purple-50/70 border-b border-purple-100 text-xs font-extrabold text-purple-950">
+                          <tr>
+                            <th className="py-3.5 pl-6">Timestamp</th>
+                            <th className="p-3.5">Operation</th>
+                            <th className="p-3.5">Asset Name</th>
+                            <th className="p-3.5">Patient / Audit Notes</th>
+                            <th className="py-3.5 pr-6 text-right">Stock Delta</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-purple-50 text-xs">
+                          {filteredLogs.map((log) => (
+                            <tr key={log.id} className="hover:bg-purple-50/40">
+                              <td className="py-3.5 pl-6 font-semibold text-slate-600 whitespace-nowrap">{formatDateTime(log.date)}</td>
+                              <td className="p-3.5">
+                                {log.actionType === "refill" ? (
+                                  <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-lg font-bold inline-flex items-center gap-1">
+                                    <Icon name="refresh-cw" className="w-3 h-3" /> Refill
+                                  </span>
+                                ) : log.actionType === "wastage" ? (
+                                  <span className="bg-orange-50 text-orange-700 border border-orange-200 px-2.5 py-1 rounded-lg font-bold inline-flex items-center gap-1">
+                                    <Icon name="alert-octagon" className="w-3 h-3" /> Wastage
+                                  </span>
+                                ) : (
+                                  <span className="bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-1 rounded-lg font-bold inline-flex items-center gap-1">
+                                    <Icon name="history" className="w-3 h-3" /> Dispensed
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-3.5 font-extrabold text-slate-900 text-sm">
+                                <HighlightedText text={log.itemName} highlight={localSearch} />
+                              </td>
+                              <td className="p-3.5 text-slate-500 font-medium">
+                                {log.patientName && (
+                                  <span className="font-bold text-purple-900 bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-md mr-1.5">
+                                    {log.patientName}
+                                  </span>
+                                )}
+                                <HighlightedText text={log.notes || ""} highlight={localSearch} />
+                              </td>
+                              <td className={`py-3.5 pr-6 text-right font-black text-base ${
+                                log.actionType === "refill" ? "text-emerald-600" : log.actionType === "wastage" ? "text-orange-500" : "text-purple-700"
+                              }`}>
+                                {log.actionType === "refill" ? "+" : "-"}{log.quantity}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </main>
+
+          {/* ─────────────────────────────────────────────────────────
+             MODALS: ADD/EDIT, REFILL, WASTAGE, DELETE, WIPE, PDF
+             ───────────────────────────────────────────────────────── */}
+
+          {/* 1. Refill Modal */}
+          {refillItem && (
+            <RefillModal
+              item={refillItem}
+              onClose={() => setRefillItem(null)}
+              onConfirm={(qty, batch, exp) => {
+                setItems((prev) =>
+                  prev.map((it) =>
+                    it.id === refillItem.id
+                      ? {
+                          ...it,
+                          initialStock: it.initialStock + qty,
+                          currentStock: it.currentStock + qty,
+                          batchNumber: batch || it.batchNumber,
+                          expiryDate: exp || it.expiryDate
+                        }
+                      : it
+                  )
+                );
+                setLogs((prev) => [
+                  {
+                    id: `log-${Date.now()}`,
+                    itemId: refillItem.id,
+                    itemName: refillItem.name,
+                    actionType: "refill",
+                    quantity: qty,
+                    date: new Date(),
+                    notes: `Restock${batch ? " Batch: " + batch : ""}`
+                  },
+                  ...prev
+                ]);
+                triggerHighlight(refillItem.id);
+                showToast("Stock Refilled", `Added +${qty} units to ${refillItem.name}.`);
+                setRefillItem(null);
+              }}
+            />
+          )}
+
+          {/* 2. Wastage Modal */}
+          {wastageItem && (
+            <WastageModal
+              item={wastageItem}
+              onClose={() => setWastageItem(null)}
+              onConfirm={(qty, reason) => {
+                setItems((prev) =>
+                  prev.map((it) =>
+                    it.id === wastageItem.id
+                      ? {
+                          ...it,
+                          dispensed: it.dispensed + qty,
+                          currentStock: it.currentStock - qty
+                        }
+                      : it
+                  )
+                );
+                setLogs((prev) => [
+                  {
+                    id: `log-${Date.now()}`,
+                    itemId: wastageItem.id,
+                    itemName: wastageItem.name,
+                    actionType: "wastage",
+                    quantity: qty,
+                    date: new Date(),
+                    notes: `Wastage: ${reason || "Disposed"}`
+                  },
+                  ...prev
+                ]);
+                triggerHighlight(wastageItem.id);
+                showToast("Wastage Logged", `Deducted ${qty} units from ${wastageItem.name}.`);
+                setWastageItem(null);
+              }}
+            />
+          )}
+
+          {/* 3. Add / Edit Asset Modal */}
+          {addModalOpen && (
+            <AddEditModal
+              currentTab={activeTab === "log" ? "medications" : activeTab}
+              editingItem={editingItem}
+              dynamicCols={dynamicColumns}
+              onClose={() => {
+                setAddModalOpen(false);
+                setEditingItem(null);
+              }}
+              onSave={(savedItem, isEdit) => {
+                if (isEdit) {
+                  setItems((prev) => prev.map((it) => (it.id === savedItem.id ? savedItem : it)));
+                  showToast("Asset Updated", `${savedItem.name} updated successfully.`);
+                } else {
+                  setItems((prev) => [savedItem, ...prev]);
+                  setLogs((prev) => [
+                    {
+                      id: `log-${Date.now()}`,
+                      itemId: savedItem.id,
+                      itemName: savedItem.name,
+                      actionType: "refill",
+                      quantity: savedItem.initialStock,
+                      date: new Date(),
+                      notes: "Initial Stock Setup"
+                    },
+                    ...prev
+                  ]);
+                  showToast("Asset Added", `${savedItem.name} added to clinic inventory.`);
+                }
+                triggerHighlight(savedItem.id);
+                setAddModalOpen(false);
+                setEditingItem(null);
+              }}
+            />
+          )}
+
+          {/* 4. Delete Single Item Confirmation */}
+          {deleteConfirmItem && (
+            <div className="fixed inset-0 z-50 bg-purple-950/30 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl border border-red-100 shadow-2xl max-w-sm w-full p-6 text-center">
+                <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-3">
+                  <Icon name="alert-triangle" className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-extrabold text-red-600">Delete {deleteConfirmItem.name}?</h3>
+                <p className="text-xs text-slate-500 mt-1">This will permanently remove this item from your inventory.</p>
+                <div className="flex justify-center gap-2.5 mt-5">
+                  <button onClick={() => setDeleteConfirmItem(null)} className="px-5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      setItems((prev) => prev.filter((i) => i.id !== deleteConfirmItem.id));
+                      showToast("Item Deleted", `${deleteConfirmItem.name} removed.`);
+                      setDeleteConfirmItem(null);
+                    }}
+                    className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md"
+                  >
+                    Delete Item
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 5. Wipe Category Confirmation */}
+          {wipeConfirmOpen && (
+            <div className="fixed inset-0 z-50 bg-purple-950/30 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl border border-red-100 shadow-2xl max-w-sm w-full p-6 text-center">
+                <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-3">
+                  <Icon name="alert-triangle" className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-extrabold text-red-600">Wipe All {categoryLabel}?</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  This will permanently delete <strong>ALL {tabItems.length} items</strong> in this category.
+                </p>
+                <div className="flex justify-center gap-2.5 mt-5">
+                  <button onClick={() => setWipeConfirmOpen(false)} className="px-5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      setItems((prev) => prev.filter((i) => i.category !== activeTab));
+                      showToast("Category Wiped", `All ${categoryLabel} items were deleted.`);
+                      setWipeConfirmOpen(false);
+                    }}
+                    className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md"
+                  >
+                    Yes, Wipe Data
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 6. Download PDF Report Modal */}
+          {downloadOpen && (
+            <div className="fixed inset-0 z-50 bg-purple-950/30 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl border border-purple-100 shadow-2xl max-w-md w-full p-6">
+                <div className="flex items-center gap-3 pb-3 border-b border-purple-50">
+                  <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center">
+                    <Icon name="download" className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-extrabold text-purple-950">Export Clinic Inventory Report</h3>
+                    <p className="text-xs text-slate-500">Generate a formatted PDF audit of stock levels & logs.</p>
+                  </div>
+                </div>
+                <div className="py-4 space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-purple-700">Audit Timeframe</label>
+                  <select
+                    value={reportRange}
+                    onChange={(e) => setReportRange(e.target.value)}
+                    className="w-full h-11 px-3 rounded-xl border border-purple-100 bg-slate-50 text-xs font-bold text-slate-700"
+                  >
+                    <option value="1month">Last 1 Month</option>
+                    <option value="6months">Last 6 Months</option>
+                    <option value="1year">Last 1 Year</option>
+                    <option value="all">All Time</option>
+                  </select>
+                </div>
+                <div className="flex justify-end gap-2 pt-3 border-t border-purple-50">
+                  <button onClick={() => setDownloadOpen(false)} className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDownloadPdf}
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-violet-600 text-white text-xs font-bold shadow-md flex items-center gap-1.5"
+                  >
+                    <Icon name="download" className="w-4 h-4" /> Export PDF Report
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Toast Stack */}
+          <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+            {toasts.map((t) => (
+              <div
+                key={t.id}
+                className={`pointer-events-auto p-4 rounded-2xl shadow-xl border backdrop-blur-xl flex items-start gap-3 transition-all ${
+                  t.variant === "destructive"
+                    ? "bg-red-600 text-white border-red-500"
+                    : "bg-white/95 text-purple-950 border-purple-200"
+                }`}
+              >
+                <Icon name={t.variant === "destructive" ? "alert-triangle" : "check-circle-2"} className={`w-5 h-5 shrink-0 mt-0.5 ${t.variant === "destructive" ? "text-white" : "text-purple-600"}`} />
+                <div>
+                  <h5 className="text-xs font-extrabold">{t.title}</h5>
+                  <p className={`text-[11px] mt-0.5 ${t.variant === "destructive" ? "text-red-100" : "text-slate-500"}`}>{t.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       Refill Stock Modal Component
+       ───────────────────────────────────────────────────────────── */
+    function RefillModal({ item, onClose, onConfirm }) {
+      const [qty, setQty] = useState("");
+      const [batch, setBatch] = useState(item.batchNumber || "");
+      const [exp, setExp] = useState(item.expiryDate || "");
+      const parsed = parseInt(qty, 10) || 0;
+
+      return (
+        <div className="fixed inset-0 z-50 bg-purple-950/30 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-purple-100 shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between pb-3 border-b border-purple-50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
+                  <Icon name="refresh-cw" className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-purple-950">Refill Stock: {item.name}</h3>
+                  <p className="text-[11px] text-slate-500">Add incoming units and update batch records.</p>
+                </div>
+              </div>
+              <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><Icon name="x" className="w-4 h-4" /></button>
+            </div>
+
+            <div className="py-4 space-y-4">
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="p-3 rounded-2xl bg-purple-50/60 border border-purple-100">
+                  <span className="text-[10px] font-bold uppercase text-slate-500">Current Stock</span>
+                  <div className="text-2xl font-black text-purple-950 mt-0.5">{item.currentStock}</div>
+                </div>
+                <div className="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-200">
+                  <span className="text-[10px] font-bold uppercase text-emerald-700">Projected Total</span>
+                  <div className="text-2xl font-black text-emerald-800 mt-0.5">
+                    {item.currentStock + parsed}
+                    {parsed > 0 && <span className="text-xs ml-1.5 bg-emerald-200/80 px-1.5 py-0.5 rounded">+{parsed}</span>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-purple-700">Quantity to Add</label>
+                  <div className="flex gap-1">
+                    {[10, 50, 100].map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setQty(String((parseInt(qty, 10) || 0) + p))}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-700 hover:bg-purple-200"
+                      >
+                        +{p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <input
+                  type="number"
+                  min="1"
+                  autoFocus
+                  value={qty}
+                  onChange={(e) => setQty(e.target.value)}
+                  placeholder="e.g. 100"
+                  className="w-full h-11 text-center text-lg font-black rounded-xl border border-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+
+              {item.hasExpiry !== false && (
+                <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-purple-50">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-purple-700">Batch No.</label>
+                    <input value={batch} onChange={(e) => setBatch(e.target.value)} className="w-full h-9 px-2.5 mt-1 text-xs rounded-xl border border-purple-100" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-red-600">Expiry Date</label>
+                    <input type="date" value={exp} onChange={(e) => setExp(e.target.value)} className="w-full h-9 px-2.5 mt-1 text-xs rounded-xl border border-red-200" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-purple-50">
+              <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50">Cancel</button>
+              <button
+                disabled={parsed <= 0}
+                onClick={() => onConfirm(parsed, batch, exp)}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-violet-600 text-white text-xs font-bold shadow-md disabled:opacity-40"
+              >
+                Confirm Refill
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       Wastage Modal Component
+       ───────────────────────────────────────────────────────────── */
+    function WastageModal({ item, onClose, onConfirm }) {
+      const [qty, setQty] = useState("");
+      const [reason, setReason] = useState("");
+      const parsed = parseInt(qty, 10) || 0;
+
+      return (
+        <div className="fixed inset-0 z-50 bg-purple-950/30 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-orange-100 shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between pb-3 border-b border-orange-50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
+                  <Icon name="alert-octagon" className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-orange-950">Log Wastage: {item.name}</h3>
+                  <p className="text-[11px] text-slate-500">Record broken vials, spilled meds, or expired disposal.</p>
+                </div>
+              </div>
+              <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><Icon name="x" className="w-4 h-4" /></button>
+            </div>
+
+            <div className="py-4 space-y-3.5">
+              <div>
+                <label className="text-[10px] font-bold uppercase text-orange-700">Quantity Lost / Disposed</label>
+                <input
+                  type="number"
+                  min="1"
+                  autoFocus
+                  value={qty}
+                  onChange={(e) => setQty(e.target.value)}
+                  placeholder={`Available: ${Math.max(0, item.currentStock)}`}
+                  className="w-full h-11 px-3 mt-1 text-base font-bold rounded-xl border border-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase text-orange-700">Reason / Disposal Note</label>
+                <input
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="e.g. Dropped vial, cold-chain breach, expired..."
+                  className="w-full h-10 px-3 mt-1 text-xs rounded-xl border border-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-orange-50">
+              <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50">Cancel</button>
+              <button
+                disabled={parsed <= 0}
+                onClick={() => onConfirm(parsed, reason)}
+                className="px-5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold shadow-md disabled:opacity-40"
+              >
+                Confirm Wastage
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       Add / Edit Item Modal Component (2-Step Core + Custom Columns)
+       ───────────────────────────────────────────────────────────── */
+    function AddEditModal({ currentTab, editingItem, dynamicCols, onClose, onSave }) {
+      const [formPage, setFormPage] = useState(1);
+      const [name, setName] = useState(editingItem?.name || "");
+      const [dosage, setDosage] = useState(editingItem?.dosage || "");
+      const [type, setType] = useState(editingItem?.type || "Tablet");
+      const [price, setPrice] = useState(editingItem?.price?.toString() || "");
+      const [initialStock, setInitialStock] = useState(editingItem?.initialStock?.toString() || "100");
+      const [minStockThreshold, setMinStockThreshold] = useState(editingItem?.minStockThreshold?.toString() || "15");
+      const [usedForAge, setUsedForAge] = useState(editingItem?.usedForAge || "");
+      const [supplier, setSupplier] = useState(editingItem?.supplier || "");
+      const [location, setLocation] = useState(editingItem?.location || "");
+      const [batchNumber, setBatchNumber] = useState(editingItem?.batchNumber || "");
+      const [expiryDate, setExpiryDate] = useState(editingItem?.expiryDate || "");
+      const [description, setDescription] = useState(editingItem?.description || "");
+      const [subCategory, setSubCategory] = useState(editingItem?.subCategory || "Single-Dose Vial (SDV)");
+      const [storageTemp, setStorageTemp] = useState(editingItem?.storageTemp || "Refrigerated 2°C to 8°C");
+      const [specification, setSpecification] = useState(editingItem?.specification || "");
+
+      const [customFieldsArray, setCustomFieldsArray] = useState(() => {
+        const seeded = dynamicCols.map((c) => ({ key: c, value: editingItem?.customFields?.[c] || "" }));
+        return seeded.length > 0 ? seeded : [{ key: "", value: "" }];
+      });
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!name.trim()) return;
+        const customFields = {};
+        customFieldsArray.forEach((f) => {
+          if (f.key.trim() && f.value.trim()) customFields[f.key.trim()] = f.value.trim();
+        });
+
+        const initQty = parseInt(initialStock, 10) || 0;
+        const dispensedQty = editingItem ? editingItem.dispensed : 0;
+
+        const payload = {
+          id: editingItem ? editingItem.id : `item-${Date.now()}`,
+          name: name.trim(),
+          dosage: dosage.trim(),
+          type,
+          category: editingItem ? editingItem.category : currentTab,
+          price: Math.max(0, parseFloat(price) || 0),
+          initialStock: initQty,
+          dispensed: dispensedQty,
+          currentStock: initQty - dispensedQty,
+          minStockThreshold: parseInt(minStockThreshold, 10) || 10,
+          usedForAge: usedForAge.trim(),
+          supplier: supplier.trim(),
+          location: location.trim(),
+          batchNumber: batchNumber.trim(),
+          expiryDate,
+          hasExpiry: true,
+          description: description.trim(),
+          subCategory,
+          storageTemp,
+          specification,
+          customFields
+        };
+
+        onSave(payload, !!editingItem);
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 bg-purple-950/35 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-purple-100 shadow-2xl max-w-2xl w-full overflow-hidden">
+            <div className="px-6 py-4 border-b border-purple-100 bg-gradient-to-r from-purple-50 via-violet-50/60 to-fuchsia-50/40 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-extrabold text-purple-950">
+                  {editingItem ? `Edit ${editingItem.name}` : `Add New ${currentTab.replace("_", " ")} Asset`}
+                </h3>
+                <p className="text-[11px] text-purple-700/70">Configure clinical details, threshold alerts, and custom columns.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex bg-white rounded-xl p-1 border border-purple-100">
+                  <button type="button" onClick={() => setFormPage(1)} className={`px-3 py-1 rounded-lg text-xs font-bold ${formPage === 1 ? "bg-purple-600 text-white" : "text-slate-600"}`}>1. Core</button>
+                  <button type="button" onClick={() => setFormPage(2)} className={`px-3 py-1 rounded-lg text-xs font-bold ${formPage === 2 ? "bg-purple-600 text-white" : "text-slate-600"}`}>2. Custom</button>
+                </div>
+                <button onClick={onClose} className="text-slate-400 hover:text-slate-600 ml-2"><Icon name="x" className="w-5 h-5" /></button>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[78vh] overflow-y-auto">
+              {formPage === 1 ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="text-[10px] font-bold uppercase text-purple-700">Item / Asset Name *</label>
+                      <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Dolo 650, MMR Vaccine" className="w-full h-10 px-3 mt-1 text-xs rounded-xl border border-purple-100 bg-slate-50/70 focus:bg-white" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-purple-700">Dosage / Strength</label>
+                      <input value={dosage} onChange={(e) => setDosage(e.target.value)} placeholder="e.g. 650mg, 0.5ml" className="w-full h-10 px-3 mt-1 text-xs rounded-xl border border-purple-100 bg-slate-50/70 focus:bg-white" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-purple-700">Initial Stock Qty *</label>
+                      <input type="number" required value={initialStock} onChange={(e) => setInitialStock(e.target.value)} className="w-full h-10 px-3 mt-1 text-xs font-bold rounded-xl border border-purple-100 bg-slate-50/70" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-purple-700">Unit Price (₹)</label>
+                      <input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" className="w-full h-10 px-3 mt-1 text-xs font-bold rounded-xl border border-purple-100 bg-slate-50/70" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-purple-700">Low Stock Alert Threshold</label>
+                      <input type="number" value={minStockThreshold} onChange={(e) => setMinStockThreshold(e.target.value)} className="w-full h-10 px-3 mt-1 text-xs font-bold rounded-xl border border-purple-200 bg-purple-50/40" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-purple-700">Supplier / Brand</label>
+                      <input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="e.g. Cipla, GSK" className="w-full h-10 px-3 mt-1 text-xs rounded-xl border border-purple-100 bg-slate-50/70" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-purple-700">Batch / Lot Number</label>
+                      <input value={batchNumber} onChange={(e) => setBatchNumber(e.target.value)} placeholder="e.g. BT-2026" className="w-full h-10 px-3 mt-1 text-xs rounded-xl border border-purple-100 bg-slate-50/70" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-red-600">Expiry Date</label>
+                      <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className="w-full h-10 px-3 mt-1 text-xs rounded-xl border border-red-200 bg-red-50/30" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-purple-700">Physical Location</label>
+                      <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Main Fridge A, Shelf 2" className="w-full h-10 px-3 mt-1 text-xs rounded-xl border border-purple-100 bg-slate-50/70" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold uppercase text-purple-700">Target Patient Age / Notes</label>
+                      <input value={usedForAge} onChange={(e) => setUsedForAge(e.target.value)} placeholder="e.g. Adults, Pediatrics" className="w-full h-10 px-3 mt-1 text-xs rounded-xl border border-purple-100 bg-slate-50/70" />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-purple-50/60 border border-purple-100 rounded-2xl p-4 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h4 className="text-xs font-extrabold uppercase text-purple-900">Dynamic Custom Attributes</h4>
+                      <p className="text-[11px] text-purple-700/70">Automatically creates inline-editable columns in Table View.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCustomFieldsArray([...customFieldsArray, { key: "", value: "" }])}
+                      className="px-3 py-1.5 rounded-xl bg-white border border-purple-200 text-purple-700 text-xs font-bold"
+                    >
+                      + Add Attribute
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {customFieldsArray.map((f, idx) => (
+                      <div key={idx} className="flex gap-2 bg-white p-2 rounded-xl border border-purple-100">
+                        <input
+                          placeholder="Column Header (e.g. Rack Code)"
+                          value={f.key}
+                          onChange={(e) => {
+                            const copy = [...customFieldsArray];
+                            copy[idx].key = e.target.value;
+                            setCustomFieldsArray(copy);
+                          }}
+                          className="h-8 px-2.5 text-xs font-bold bg-purple-50/40 rounded-lg w-2/5 border border-purple-100"
+                        />
+                        <input
+                          placeholder="Value (e.g. R-104)"
+                          value={f.value}
+                          onChange={(e) => {
+                            const copy = [...customFieldsArray];
+                            copy[idx].value = e.target.value;
+                            setCustomFieldsArray(copy);
+                          }}
+                          className="h-8 px-2.5 text-xs bg-slate-50 rounded-lg flex-1 border border-slate-100"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setCustomFieldsArray(customFieldsArray.filter((_, i) => i !== idx))}
+                          className="h-8 w-8 text-red-400 hover:text-red-600 flex items-center justify-center"
+                        >
+                          <Icon name="x" className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-between items-center pt-4 border-t border-purple-100">
+                <button
+                  type="button"
+                  onClick={() => setFormPage(formPage === 1 ? 2 : 1)}
+                  className="px-4 py-2 rounded-xl border border-purple-200 text-purple-700 text-xs font-bold hover:bg-purple-50"
+                >
+                  {formPage === 1 ? "Custom Columns →" : "← Back to Core"}
+                </button>
+                <div className="flex gap-2">
+                  <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50">
+                    Cancel
+                  </button>
+                  <button type="submit" className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-violet-600 text-white text-xs font-bold shadow-md">
+                    {editingItem ? "Update Asset" : "Save to Inventory"}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<PanaceaInventoryApp />);
+  </script>
+</body>
+</html>

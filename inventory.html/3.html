@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panacea Inventory 2.0 - Preview</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; padding: 2rem; }
+    </style>
+</head>
+<body>
+
+<!-- Dashboard Shell Simulator -->
+<div class="w-full max-w-[1900px] mx-auto flex flex-col gap-6">
+
+    <!-- FULL WIDTH INVENTORY CARD -->
+    <div class="w-full shadow-2xl shadow-purple-900/5 border border-purple-100 overflow-hidden rounded-3xl bg-white relative">
+        <div class="h-1.5 w-full bg-gradient-to-r from-fuchsia-500 via-purple-600 to-violet-600"></div>
+
+        <!-- HERO HEADER -->
+        <div class="bg-gradient-to-b from-purple-50/50 to-white border-b border-purple-100 pb-8 pt-10 px-6 sm:px-10 relative overflow-hidden">
+            <!-- Background Pattern -->
+            <div class="absolute inset-0 pointer-events-none overflow-hidden opacity-[0.04]">
+                <svg class="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+                    <pattern id="hex-pattern" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+                        <path d="M20 0 L40 10 L40 30 L20 40 L0 30 L0 10 Z" fill="none" stroke="#7c3aed" stroke-width="1"/>
+                    </pattern>
+                    <rect x="0" y="0" width="100%" height="100%" fill="url(#hex-pattern)"/>
+                </svg>
+            </div>
+            <!-- Glows -->
+            <div class="absolute -top-32 -right-32 w-[500px] h-[500px] rounded-full bg-purple-200/30 blur-3xl pointer-events-none"></div>
+
+            <div class="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-8 relative z-10 w-full">
+                <!-- Text -->
+                <div class="flex flex-col gap-4 max-w-3xl">
+                    <div class="flex items-center gap-3">
+                        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-600 to-fuchsia-600 flex items-center justify-center shadow-lg text-white">
+                            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] font-black uppercase tracking-widest text-purple-700 bg-purple-100/90 border border-purple-200/60 px-2.5 py-0.5 rounded-full">Panacea Inventory 2.0</span>
+                                <span class="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2.5 py-0.5 rounded-full">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Live Cloud Sync
+                                </span>
+                            </div>
+                            <h2 class="text-3xl sm:text-4xl font-black text-purple-950 tracking-tight leading-tight">
+                                Your Clinic's Inventory, <br class="hidden sm:block">
+                                <span class="bg-gradient-to-r from-purple-600 to-fuchsia-600 bg-clip-text text-transparent">Smarter Than Ever</span>
+                            </h2>
+                        </div>
+                    </div>
+                    <p class="text-slate-500 font-medium text-sm sm:text-base max-w-2xl">
+                        Track, manage, and monitor real-time clinical stock, cold-chain vaccines, and supply health in one command center.
+                    </p>
+                </div>
+
+                <!-- Right Actions -->
+                <div class="flex flex-col items-end gap-6 w-full xl:w-auto">
+                    <!-- SVG Illustration -->
+                    <div class="relative w-64 h-32 flex items-center justify-center pointer-events-none">
+                        <svg viewBox="0 0 240 140" class="w-full h-full drop-shadow-lg z-10">
+                            <!-- Animated Elements via Tailwind arbitrary classes -->
+                            <g class="animate-[spin_20s_linear_infinite] origin-center">
+                                <ellipse cx="120" cy="70" rx="85" ry="30" fill="none" stroke="#e9d5ff" stroke-width="1" stroke-dasharray="4 4" transform="rotate(-15 120 70)"/>
+                            </g>
+                            <g class="animate-[bounce_4s_ease-in-out_infinite]" transform="translate(35, 65) rotate(-28)">
+                                <rect x="0" y="0" width="36" height="16" rx="8" fill="#ffffff" stroke="#e9d5ff" stroke-width="1.5" />
+                                <path d="M 0 8 A 8 8 0 0 1 8 0 L 18 0 L 18 16 L 8 16 A 8 8 0 0 1 0 8 Z" fill="#e879f9" />
+                            </g>
+                            <g class="animate-[bounce_5s_ease-in-out_infinite_reverse]" transform="translate(95, 20) rotate(5)">
+                                <rect x="13" y="0" width="30" height="10" rx="3" fill="#9333ea" />
+                                <rect x="5" y="16" width="46" height="66" rx="10" fill="#f3e8ff" stroke="#d8b4fe" stroke-width="1.5" />
+                                <rect x="9" y="38" width="38" height="40" rx="6" fill="#a855f7" opacity="0.9" />
+                                <path d="M25 36 H31 V40 H35 V46 H31 V50 H25 V46 H21 V40 H25 Z" fill="#ffffff" />
+                            </g>
+                        </svg>
+                    </div>
+
+                    <!-- Buttons -->
+                    <div class="flex gap-3">
+                        <button class="px-5 py-2.5 rounded-xl border border-purple-200 text-purple-800 bg-white hover:bg-purple-50 font-bold text-sm shadow-sm transition-all">Smart Import</button>
+                        <button class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-600 text-white font-bold text-sm shadow-lg hover:-translate-y-0.5 transition-all">+ Add Item</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FLUID METRICS GRID -->
+            <div class="grid gap-4 mt-8 relative z-10 w-full" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
+                <div class="p-4 rounded-2xl bg-white border border-purple-100 flex justify-between items-center shadow-sm">
+                    <div><span class="text-xs font-bold text-slate-500 uppercase">Total Items</span><div class="text-3xl font-black text-purple-950 mt-1">1,248</div></div>
+                </div>
+                <div class="p-4 rounded-2xl bg-white border border-amber-200 flex justify-between items-center shadow-sm">
+                    <div><span class="text-xs font-bold text-amber-600 uppercase">Low Stock</span><div class="text-3xl font-black text-amber-600 mt-1">12</div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONTENT AREA (FLUID GRID FIX) -->
+        <div class="p-6 sm:p-8 bg-slate-50 w-full">
+            <h3 class="text-lg font-bold text-purple-900 mb-4">Inventory Cards (Fluid Layout)</h3>
+            
+            <!-- MAGIC FIX: auto-fit handles 2 items beautifully across the full width without awkward gaps -->
+            <div class="grid gap-5 w-full" style="grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));">
+                
+                <!-- CARD 1 -->
+                <div class="group relative rounded-2xl bg-white border border-purple-100 p-4 shadow-sm overflow-hidden hover:-translate-y-1 hover:shadow-[0_12px_24px_-8px_rgba(168,85,247,0.15)] hover:border-purple-300 transition-all duration-300 flex flex-col justify-between">
+                    
+                    <!-- Decorative Background SVG -->
+                    <div class="absolute -bottom-8 -right-8 w-40 h-40 text-purple-600 opacity-[0.03] group-hover:opacity-[0.07] group-hover:scale-110 group-hover:-rotate-3 transition-all duration-500 pointer-events-none z-0">
+                        <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 50 a30 30 0 1 1 60 0 a30 30 0 1 1 -60 0 M20 50 l60 0 M50 20 v60" />
+                        </svg>
+                    </div>
+
+                    <div class="relative z-10">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>In Stock</span>
+                        </div>
+                        <div class="flex items-start gap-3.5 mb-3">
+                            <div class="w-14 h-14 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center shrink-0">💊</div>
+                            <div>
+                                <h4 class="font-extrabold text-slate-900 text-sm">Paracetamol 650mg</h4>
+                                <p class="text-xs font-medium text-slate-500 mt-0.5">Tablet • Pain Relief</p>
+                            </div>
+                        </div>
+                        <div class="bg-slate-50 rounded-xl p-2.5 border border-slate-100 mb-3 group-hover:bg-white group-hover:border-purple-100 transition-colors">
+                            <div class="flex justify-between items-baseline mb-1">
+                                <span class="text-lg font-black">240 <span class="text-[11px] font-bold text-slate-500">units</span></span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-200 rounded-full"><div class="h-full rounded-full bg-emerald-500 w-[80%]"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CARD 2 -->
+                <div class="group relative rounded-2xl bg-white border border-purple-100 p-4 shadow-sm overflow-hidden hover:-translate-y-1 hover:shadow-[0_12px_24px_-8px_rgba(168,85,247,0.15)] hover:border-purple-300 transition-all duration-300 flex flex-col justify-between">
+                    <div class="absolute -bottom-8 -right-8 w-40 h-40 text-purple-600 opacity-[0.03] group-hover:opacity-[0.07] group-hover:scale-110 group-hover:-rotate-3 transition-all duration-500 pointer-events-none z-0">
+                        <svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M40 20 h20 M45 20 v-10 h10 v10 M35 30 h30 v60 a5 5 0 0 1 -5 5 h-20 a5 5 0 0 1 -5 -5 z" />
+                        </svg>
+                    </div>
+                    <div class="relative z-10">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>Low Stock</span>
+                        </div>
+                        <div class="flex items-start gap-3.5 mb-3">
+                            <div class="w-14 h-14 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center shrink-0">💉</div>
+                            <div>
+                                <h4 class="font-extrabold text-slate-900 text-sm">Hepatitis B Vaccine</h4>
+                                <p class="text-xs font-medium text-slate-500 mt-0.5">Vial • Refrigerator 2-8°C</p>
+                            </div>
+                        </div>
+                        <div class="bg-slate-50 rounded-xl p-2.5 border border-slate-100 mb-3 group-hover:bg-white group-hover:border-purple-100 transition-colors">
+                            <div class="flex justify-between items-baseline mb-1">
+                                <span class="text-lg font-black text-amber-600">8 <span class="text-[11px] font-bold text-slate-500">vials</span></span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-200 rounded-full"><div class="h-full rounded-full bg-amber-500 w-[15%]"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
